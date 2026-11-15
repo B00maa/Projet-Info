@@ -1,6 +1,6 @@
 # Madrassati Maâk
 
-Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 39 ainsi que ses ressources et ses migrations SQL.
+Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 40 ainsi que ses ressources et ses migrations SQL.
 
 ## Lancer le projet
 
@@ -23,7 +23,7 @@ La commande `npm run build` assemble le serveur et les ressources web dans `dist
 
 ## Espace scolaire connecté
 
-La route `/ecole` utilise un environnement Workers avec une base Cloudflare D1 liée au nom `DB` et un espace de stockage Cloudflare R2 lié au nom `BUCKET`. Pour une nouvelle base, appliquez `0000_school.sql`, `0001_school_life.sql`, puis `0002_school_directory.sql` dans `drizzle/`.
+La route `/ecole` utilise un environnement Workers avec une base Cloudflare D1 liée au nom `DB` et un espace de stockage Cloudflare R2 lié au nom `BUCKET`. Pour une nouvelle base, appliquez `0000_school.sql`, `0001_school_life.sql`, `0002_school_directory.sql`, puis `0003_school_workflows.sql` dans `drizzle/`.
 
 Les noms des variables d’environnement sont indiqués dans `.env.example`. Configurez les valeurs dans les secrets de l’hébergeur. Sur ChatGPT Sites, elles se trouvent dans **Paramètres → Secrets**.
 
@@ -34,7 +34,9 @@ Dans **Administration → Parents → Ajouter un parent**, créez un compte et c
 
 Les élèves, les parents et les professeurs peuvent choisir **Changer le mot de passe** en haut de leur espace scolaire. Ils utilisent leur mot de passe ou code personnel actuel. Les autres sessions sont fermées après le changement.
 
-Les professeurs peuvent générer des documents depuis une classe attribuée ou en **Préparation libre**.
+Les professeurs peuvent générer des documents depuis une classe attribuée ou en **Préparation libre**. Le coach peut enregistrer un plan et générer ses chapitres un par un. Il reprend au chapitre suivant après une interruption.
+
+Les nouveaux comptes choisissent leur mot de passe à la première connexion. L’administration suit cette étape et consulte les modifications dans **Historique des comptes**. Le professeur retrouve ses brouillons automatiques dans **Saisie des notes** et le parent voit ses actions en attente dans le résumé de la semaine.
 
 Les données du site hébergé et les valeurs de ses secrets sont absentes de l’archive. La configuration conserve les noms de liaison `DB` et `BUCKET` pour un nouveau projet.
 
