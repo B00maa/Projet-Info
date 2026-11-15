@@ -2,17 +2,20 @@ const DEEPSEEK_COACH={
   url:'https://api.deepseek.com/chat/completions',model:'deepseek-flash',secret:'DEEPSEEK_API_KEY'
 };
 const GROQ_TEACHER_COACH={
-  url:'https://api.groq.com/openai/v1/chat/completions',model:'openai/gpt-oss-120b',secret:'GROQ_API_KEY'
+  url:'https://api.groq.com/openai/v1/chat/completions',model:'openai/gpt-oss-120b',secret:'GROQ_API_KEY',
+  reasoning:'low',strictSchema:true
 };
 const GROQ_STUDENT_COACH={...GROQ_TEACHER_COACH,model:'openai/gpt-oss-20b'};
+const GROQ_BACKUP_COACH={...GROQ_TEACHER_COACH,model:'qwen/qwen3.8-27b',reasoning:'none',strictSchema:false};
 const MAX_CHAT_BODY = 192 * 1024;
+const COACH_DRAFT_FAILURES=['invalid-response','empty-answer','incomplete','lesson-incomplete'];
 const STUDENT_COACH_PROMPT = [
   'Tu es le coach scolaire de Madrassati Maâk pour des élèves du collège.',
   'Guide avec des indices et des explications adaptées au niveau de l’élève.',
   'Pour un devoir, encourage l’élève à réfléchir et à proposer une étape avant de donner la solution.',
   'Réponds dans la langue de la question. Pour le reste, utilise la langue d’interface indiquée.',
   'Reste dans le cadre scolaire, évite de demander ou de répéter des données personnelles.',
-  'Donne du texte clair avec de courts paragraphes. Si tu ignores un fait, signale-le.'
+  'Pour une question simple, réponds en quelques phrases claires. Développe les étapes si la question le demande. Si tu ignores un fait, signale-le.'
 ].join(' ');
 const TEACHER_TASKS = {
   lesson:'Développe un cours avec les définitions, les propriétés et leurs conditions, les méthodes et les justifications adaptées au niveau.',
@@ -27,7 +30,8 @@ function json(body,status = 200,headers = {}) {
 }
 
 function coachProviders(env,teacher,school=false) {
-  const groq=teacher?[GROQ_TEACHER_COACH,GROQ_STUDENT_COACH]:school?[GROQ_STUDENT_COACH,GROQ_TEACHER_COACH]:[];
+  const groq=teacher?[GROQ_TEACHER_COACH,GROQ_STUDENT_COACH,GROQ_BACKUP_COACH]:
+    school?[GROQ_STUDENT_COACH,GROQ_TEACHER_COACH,GROQ_BACKUP_COACH]:[];
   return [...groq,DEEPSEEK_COACH].filter(provider=>env[provider.secret]?.trim());
 }
 
@@ -76,14 +80,14 @@ function studentCoachRequest(chat) {
   const encoder=new TextEncoder();
   const size=message=>encoder.encode(message.content).length;
   let start=messages.length-1;
-  let budget=5600-size(messages[start]);
+  let budget=4200-size(messages[start]);
   for(let index=start-2;index>=0;index-=2) {
     budget-=size(messages[index])+size(messages[index+1]);
     if(budget<0)break;
     start=index;
   }
   return {
-    max_tokens:1000,
+    max_tokens:1200,
     messages:[{role:'system',content:`${STUDENT_COACH_PROMPT} Langue de l’interface : ${language}.`},...messages.slice(start)]
   };
 }
@@ -123,7 +127,8 @@ function teacherCoachRequest(input) {
     quantité:lesson?undefined:input.count,format:lesson?undefined:input.format,
     difficulté:input.difficulty,durée:input.minutes,précisions:notes.trim()};
   return {
-    max_tokens:lesson?teacherLessonMode(input).tokens:7600,
+    max_tokens:lesson?teacherLessonMode(input).tokens:1350+300*(input.count??5),
+    expandedTokens:lesson?(input.lessonMode==='session'?3000:teacherLessonMode(input).tokens):1600+330*(input.count??5),
     response_format:{type:'json_object'},
     messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(context)}]
   };
@@ -213,9 +218,11 @@ function teacherCoachResponse(answer,input) {
   return draft?{draft}:null;
 }
 
-function coachServiceError({status,code=502,detail,retryAfter}) {
+function coachServiceError({status,code=502,detail,retryAt}) {
   console.error('Coach service error',status,detail ?? '');
-  return retryAfter?json({status,retryAfter},code,{'Retry-After':String(retryAfter)}):json({status},code);
+  if(retryAt===undefined)return json({status},code);
+  const retryAfter=Math.max(0,Math.ceil((retryAt-Date.now())/1000));
+  return json({status,retryAfter},code,{'Retry-After':String(retryAfter)});
 }
 
 function coachProviderError(response) {
@@ -223,9 +230,11 @@ function coachProviderError(response) {
   if (detail===401||detail===403) return {status:'provider-auth',detail};
   if (detail===402) return {status:'provider-balance',detail};
   if (detail===429) {
-    const retry=response.headers.get('Retry-After');
-    const seconds=retry&&(/^\d+$/.test(retry)?Number(retry):Math.ceil((Date.parse(retry)-Date.now())/1000));
-    return {status:'rate-limit',code:429,detail,retryAfter:seconds>0?Math.min(seconds,86400):undefined};
+    const retry=response.headers.get('Retry-After')?.trim();
+    const now=Date.now();
+    const delay=retry&&(/^\d+(?:\.\d+)?$/.test(retry)?Number(retry)*1000:Date.parse(retry)-now);
+    const retryAt=Number.isFinite(delay)&&delay>=0?now+Math.min(delay,86400000):undefined;
+    return {status:'rate-limit',code:429,detail,retryAt};
   }
   if (detail===503) return {status:'busy',code:503,detail};
   if (detail===400||detail===404||detail===422||detail>=300&&detail<400) return {status:'provider-request',detail};
@@ -278,6 +287,19 @@ async function tryCoach(provider,apiKey,body,input,teacher,signal,timeout) {
   }
 }
 
+function waitForCoachQuota(delay,signal) {
+  if(signal.aborted)return Promise.resolve(false);
+  return new Promise(resolve=>{
+    const finish=()=>{
+      clearTimeout(timer);
+      signal.removeEventListener('abort',finish);
+      resolve(!signal.aborted);
+    };
+    const timer=setTimeout(finish,delay);
+    signal.addEventListener('abort',finish,{once:true});
+  });
+}
+
 async function replyToCoach(request,env,account) {
   if (request.headers.get('sec-fetch-site') === 'cross-site') return json({status:'forbidden'},403);
   if (!account) {
@@ -308,10 +330,12 @@ async function replyToCoach(request,env,account) {
   const deadline=Date.now()+(lesson?teacherLessonTimeout:teacher?50000:30000);
   const failures=[];
   const unusableSecrets=new Set();
+  let quotaRetry;
   for(const [index,provider] of providers.entries()) {
     const remaining=deadline-Date.now();
     if(remaining<=0||request.signal.aborted)break;
     if(unusableSecrets.has(provider.secret))continue;
+    if(provider===GROQ_BACKUP_COACH&&failures.length>=2&&failures.every(failure=>COACH_DRAFT_FAILURES.includes(failure.status)))continue;
     const apiKey=env[provider.secret].trim().replace(/^(["'])([\s\S]*)\1$/,'$2').replace(/^Bearer[ \t]+/i,'').trim();
     if(!/^[!-~]+$/.test(apiKey)) {
       failures.push({status:'provider-auth',detail:'credential-format'});
@@ -320,16 +344,16 @@ async function replyToCoach(request,env,account) {
     }
     const previous=failures.at(-1);
     if(index&&provider===providers[index-1]&&previous?.detail)continue;
-    const groq=provider.secret==='GROQ_API_KEY';
-    const {max_tokens,messages,response_format}=parameters;
-    const structured=teacher&&groq&&previous?.status!=='provider-request';
-    const completionTokens=teacher?(lesson?max_tokens:1600+330*(input.count??5)):1500;
+    const {max_tokens,messages,response_format,expandedTokens=max_tokens}=parameters;
+    const outputTokens=failures.some(failure=>failure.status==='incomplete')?expandedTokens:max_tokens;
+    const structured=teacher&&provider.strictSchema&&previous?.status!=='provider-request';
     const body={
       model:provider.model,stream:false,messages,
-      ...(groq?{reasoning_effort:'low',max_completion_tokens:completionTokens}:{max_tokens,thinking:{type:'disabled'}}),
+      ...(provider.reasoning?{reasoning_effort:provider.reasoning,max_completion_tokens:outputTokens}:
+        {max_tokens:outputTokens,thinking:{type:'disabled'}}),
       ...(teacher?{response_format:structured?groqTeacherFormat(input):response_format}:{})
     };
-    if(teacher&&['invalid-response','empty-answer','incomplete','lesson-incomplete'].includes(previous?.status)) {
+    if(teacher&&COACH_DRAFT_FAILURES.includes(previous?.status)) {
       body.messages=[...messages,{role:'user',content:lesson&&!input.lessonAction?
         'Vérifie les longueurs des sections, les exemples résolus, la synthèse et les corrigés. Si un plan est fourni, utilise chaque intitulé dans l’ordre. Renvoie le document complet dans un seul objet JSON.':
         'Vérifie le format et le nombre d’éléments demandés, puis renvoie un seul objet JSON complet.'}];
@@ -340,11 +364,27 @@ async function replyToCoach(request,env,account) {
       if(previous)console.info('Coach fallback succeeded',provider.model,previous.status);
       return json(result);
     }
+    if(failure.retryAt!==undefined&&(!quotaRetry||failure.retryAt<quotaRetry.at)) {
+      quotaRetry={provider,apiKey,body,at:failure.retryAt,index:failures.length};
+    }
     failures.push(failure);
-    if(['provider-auth','provider-balance'].includes(failure.status))unusableSecrets.add(provider.secret);
+    if(failure.detail===401||failure.status==='provider-balance')unusableSecrets.add(provider.secret);
+  }
+  if(quotaRetry) {
+    const {provider,apiKey,body,at,index}=quotaRetry;
+    const delay=Math.max(0,at-Date.now());
+    if(!unusableSecrets.has(provider.secret)&&delay<=3000&&deadline-Date.now()-delay>=8000&&
+      await waitForCoachQuota(delay,request.signal)) {
+      const {result,...failure}=await tryCoach(provider,apiKey,body,input,teacher,request.signal,deadline-Date.now());
+      if(result) {
+        console.info('Coach fallback succeeded',provider.model,'quota-reopened');
+        return json(result);
+      }
+      failures[index]=failure;
+    }
   }
   const [limit]=failures.filter(failure=>failure.status==='rate-limit')
-    .sort((a,b)=>(a.retryAfter??86401)-(b.retryAfter??86401));
+    .sort((a,b)=>(a.retryAt??Infinity)-(b.retryAt??Infinity));
   return coachServiceError(limit||failures.findLast(failure=>failure.status!=='empty-answer')||
     failures.at(-1)||{status:'timeout',code:504});
 }
