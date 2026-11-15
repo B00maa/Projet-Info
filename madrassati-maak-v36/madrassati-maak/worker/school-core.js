@@ -80,7 +80,7 @@ async function schoolAccount(request,env) {
   if (!env.DB) throw new SchoolError(503,'Le stockage de l’espace scolaire est indisponible.','storage');
   const db = env.DB;
   const member=await schoolSessionAccount(db,token);
-  if(member) return {id:member.id,name:member.name,role:member.role,auth:'school'};
+  if(member) return {id:member.id,name:member.name,role:member.role,auth:'school',passwordSetup:!!member.onboarding_required};
   if (!user||user.length>255) throw new SchoolError(401,'Connecte-toi à ton espace scolaire.','sign-in');
   let account = await schoolFirst(db,'SELECT id,name,role,active FROM school_accounts WHERE user_id=?',[user]);
   if (!account && schoolNativeEmail(email)) {
@@ -139,6 +139,20 @@ async function schoolGuardianSelection(db,values,parentId=null) {
   return children;
 }
 
+function schoolAccountEvent(db,actorId,memberId,action,condition='1',values=[]) {
+  return schoolQuery(db,`INSERT INTO school_account_history(actor_id,member_id,action,occurred_at)
+    SELECT ?,?,?,? WHERE ${condition}`,[actorId,memberId,action,Date.now(),...values]);
+}
+
+async function schoolAccountHistory(db,pageParam) {
+  const parsed=Number(pageParam);
+  const page=Number.isSafeInteger(parsed)&&parsed>0?Math.min(parsed,1000000):1;
+  const rows=await schoolAll(db,`SELECT h.id,h.action,h.occurred_at,a.name AS actor,m.name AS member
+    FROM school_account_history h JOIN school_accounts a ON a.id=h.actor_id JOIN school_accounts m ON m.id=h.member_id
+    ORDER BY h.id DESC LIMIT 31 OFFSET ?`,[(page-1)*30]);
+  return {page,more:rows.length>30,rows:rows.slice(0,30)};
+}
+
 async function schoolAccountSave(db,account,data) {
   schoolRoles(account,'administration');
   const name = schoolText(data.name,100);
@@ -155,13 +169,14 @@ async function schoolAccountSave(db,account,data) {
   const access=schoolAuth?await schoolNewCredential(login||schoolNewLogin(id,role)):null;
   const statements = [schoolQuery(db,'INSERT INTO school_accounts(id,email,name,role) VALUES(?,?,?,?)',[id,email,name,role])];
   if (role === 'eleve') statements.push(schoolQuery(db,'INSERT INTO school_enrolments(student_id,class_id) VALUES(?,?)',[id,classes[0]]));
-  if (access) statements.push(schoolQuery(db,'INSERT INTO school_student_access(student_id,login,code_digest) VALUES(?,?,?)',[id,access.login,access.digest]));
+  if (access) statements.push(schoolQuery(db,'INSERT INTO school_student_access(student_id,login,code_digest,onboarding_required) VALUES(?,?,?,1)',[id,access.login,access.digest]));
   if (role === 'professeur') for (const classId of classes) {
     statements.push(schoolQuery(db,'INSERT INTO school_teaching(teacher_id,class_id,subject) VALUES(?,?,?)',[id,classId,subject]));
   }
   if (role === 'parent') for (const child of children) {
     statements.push(schoolQuery(db,'INSERT INTO school_guardians(parent_id,student_id) VALUES(?,?)',[id,child]));
   }
+  if(role==='parent') statements.push(schoolAccountEvent(db,account.id,id,'parent-linked'));
   try { await db.batch(statements); }
   catch (error) {
     if (/UNIQUE constraint failed: school_accounts.email/i.test(String(error?.message))) {
@@ -186,6 +201,8 @@ async function schoolAccountEdit(db,account,data) {
   const condition=[member.id,data.revision];
   const changes=[];
   if(member.role==='eleve') changes.push(
+    schoolAccountEvent(db,account.id,member.id,'class-changed',`${guard} AND
+      NOT EXISTS (SELECT 1 FROM school_enrolments WHERE student_id=? AND class_id=?)`,[...condition,member.id,classes[0]]),
     schoolQuery(db,`INSERT INTO school_enrolments(student_id,class_id) SELECT ?,? WHERE ${guard}
       ON CONFLICT(student_id) DO UPDATE SET class_id=excluded.class_id`,[member.id,classes[0],...condition]));
   if(member.role==='professeur') changes.push(
@@ -194,10 +211,15 @@ async function schoolAccountEdit(db,account,data) {
       SELECT ?,value,? FROM json_each(?) WHERE ${guard}`,[member.id,subject,JSON.stringify(classes),...condition]));
   if(member.role==='parent') {
     const children=await schoolGuardianSelection(db,data.childIds,member.id);
+    const selected=JSON.stringify(children);
     changes.push(
+      schoolAccountEvent(db,account.id,member.id,'parent-linked',`${guard} AND (
+        (SELECT COUNT(*) FROM school_guardians WHERE parent_id=?)<>? OR
+        EXISTS (SELECT 1 FROM school_guardians WHERE parent_id=? AND student_id NOT IN (SELECT value FROM json_each(?))))`,
+      [...condition,member.id,children.length,member.id,selected]),
       schoolQuery(db,`DELETE FROM school_guardians WHERE parent_id=? AND ${guard}`,[member.id,...condition]),
       schoolQuery(db,`INSERT INTO school_guardians(parent_id,student_id)
-        SELECT ?,value FROM json_each(?) WHERE ${guard}`,[member.id,JSON.stringify(children),...condition]));
+        SELECT ?,value FROM json_each(?) WHERE ${guard}`,[member.id,selected,...condition]));
   }
   const results=await db.batch([
     ...changes,
@@ -245,7 +267,7 @@ async function schoolDirectory(db,account) {
     const [classes,accounts,teaching,enrolments,guardians] = await Promise.all([
       schoolAll(db,'SELECT id,name FROM school_classes ORDER BY name'),
       schoolAll(db,`SELECT a.id,a.name,CASE WHEN a.email LIKE '%@eleve.madrassati.invalid' THEN '' ELSE a.email END AS email,
-        a.role,a.active,a.revision,a.archived_at,k.login,k.revision AS access_revision
+        a.role,a.active,a.revision,a.archived_at,k.login,k.revision AS access_revision,k.first_login_at,k.onboarding_required
         FROM school_accounts a LEFT JOIN school_student_access k ON k.student_id=a.id
         WHERE a.role!='administration' ORDER BY a.role,a.name`),
       schoolAll(db,'SELECT teacher_id,class_id,subject FROM school_teaching'),
@@ -309,6 +331,7 @@ async function schoolState(db,account,url) {
   }
   if (account.role==='professeur'&&(!requestedView||view==='notes')) attach('evaluations',schoolTeacherEvaluations(db,account,period));
   if (account.role==='administration'&&(!requestedView||view==='notes')) attach('gradeProgress',schoolGradeProgress(db,period));
+  if (account.role==='administration'&&view==='historique') attach('accountHistory',schoolAccountHistory(db,url.searchParams.get('page')));
   if (view==='evaluations') attach('assessments',schoolAssessments(db,account,child));
   if (view==='absences'||(view==='semaine'&&account.role==='parent')) attach('absences',schoolAbsences(db,account,child));
   if (view==='devoirs'&&canSeeHomework) attach('homework',schoolHomeworkList(db,account,child));
@@ -377,6 +400,7 @@ async function schoolLifeWrite(request,env,account,route) {
       case '/assessment': return json({id:await schoolAssessmentSave(db,account,data)});
       case '/assessment/remove': await schoolAssessmentRemove(db,account,data); break;
       case '/evaluation': return json({id:await schoolEvaluationSave(db,account,data)});
+      case '/evaluation/draft': return json(await schoolEvaluationDraftSave(db,account,data));
       case '/attendance': await schoolAttendanceSave(env,account,data); break;
       case '/attendance/paper': await schoolPaperReceived(db,account,data); break;
       case '/justification/review': await schoolJustificationReview(db,account,data); break;
@@ -415,8 +439,14 @@ async function handleSchool(request,env,url) {
       return await schoolSignIn(request,db,data);
     }
     const account = await schoolAccount(request,env);
+    if (request.method==='POST'&&route==='/auth/password') return await schoolChangePassword(request,db,account,await schoolJson(request,4096));
+    if (account.passwordSetup) {
+      if (request.method==='GET'&&route==='/state') return json({account,now:Date.now()});
+      throw new SchoolError(403,'Choisis ton mot de passe pour accéder à ton espace.','password-setup');
+    }
     if (request.method === 'GET') {
       if (route === '/state') return json(await schoolState(db,account,url));
+      if (route === '/coach/course') return json({course:await schoolTeacherCourse(db,account)});
       if (route === '/coach/status') {
         schoolRoles(account,'professeur','eleve');
         return json({status:coachProviders(env,account.role==='professeur',true).length?'ready':'needs-key'});
@@ -426,8 +456,8 @@ async function handleSchool(request,env,url) {
       if (route.startsWith('/file/')) return await schoolSessionFile(env,account,route.slice(6),url,request);
       return await schoolLifeRead(env,account,route,url);
     }
-    if (route === '/auth/password') return await schoolChangePassword(request,db,account,await schoolJson(request,4096));
     if (route === '/session') return json({id:await schoolSessionSave(env,account,request)});
+    if (route === '/coach/course') return await schoolEditTeacherCourse(request,env,account);
     if (route === '/coach') {
       schoolRoles(account,'professeur','eleve');
       return await replyToCoach(request,env,account);

@@ -6,7 +6,9 @@ function validLessonRequest(input) {
   return (input.lessonMode==null||typeof input.lessonMode==='string'&&Object.hasOwn(TEACHER_LESSON_MODES,input.lessonMode))&&
     (input.lessonLevel==null||typeof input.lessonLevel==='string'&&Object.hasOwn(TEACHER_LESSON_LEVELS,input.lessonLevel))&&
     (input.lessonPlan==null||!!validateTeacherPlan(input.lessonPlan,input.lessonMode))&&
-    (input.lessonAction==null||input.lessonAction==='plan'||input.lessonAction==='expand'&&
+    (input.lessonAction==null||input.lessonAction==='plan'||input.lessonAction==='section'&&
+      Array.isArray(input.lessonPlan)&&Number.isInteger(input.lessonIndex)&&input.lessonIndex>=0&&input.lessonIndex<input.lessonPlan.length||
+      input.lessonAction==='expand'&&
       typeof input.addition==='string'&&Object.hasOwn(TEACHER_LESSON_ADDITIONS,input.addition)&&
       !!schoolText(input.heading,120)&&!!schoolText(input.explanation,3200)&&typeof input.example==='string'&&input.example.length<=1600);
 }
@@ -31,6 +33,7 @@ function teacherLessonInstructions(input) {
 }
 
 function teacherLessonToolPrompt(input) {
+  if(input.lessonAction==='section') return teacherLessonSectionPrompt(input);
   const mode=teacherLessonMode(input);
   const plan=input.lessonAction==='plan';
   const level=input.lessonLevel==='class'||!input.lessonLevel?input.level:TEACHER_LESSON_LEVELS[input.lessonLevel].fr;
@@ -46,6 +49,79 @@ function teacherLessonToolPrompt(input) {
       portée:input.lessonMode==='session'?'séance ciblée':'chapitre complet',précisions:input.notes,
       ...(plan?{}:{ajout:TEACHER_LESSON_ADDITIONS[input.addition].fr,section:input.heading,cours:input.explanation,exemple:input.example})})}]
   };
+}
+
+function teacherLessonSectionPrompt(input) {
+  const number=input.lessonIndex+1;
+  const level=input.lessonLevel&&input.lessonLevel!=='class'?TEACHER_LESSON_LEVELS[input.lessonLevel].fr:input.level;
+  const math=coachMathCourse(input);
+  return {
+    max_tokens:2200,expandedTokens:2900,response_format:{type:'json_object'},
+    messages:[{role:'system',content:[
+      'Rédige uniquement la section demandée du cours et respecte la langue. Suis le plan et le niveau sans répéter les notions du plan traitées ailleurs.',
+      'Donne un objectif inférieur à 90 caractères, un cours rédigé entre 45 mots et 720 caractères, un exemple résolu inférieur à 250 caractères, une phrase à retenir inférieure à 95 caractères, et un exercice autonome inférieur à 150 caractères avec son corrigé expliqué inférieur à 700 caractères.',
+      'Pour des mathématiques de niveau CPGE ou L1 précise les hypothèses, puis justifie la propriété utilisée. Emploie du texte brut avec des notations lisibles.',
+      'Réponds exclusivement en JSON sous cette forme : {"objective":"Objectif","explanation":"Cours rédigé","example":"Exemple résolu","takeaway":"À retenir","exercise":{"prompt":"Énoncé","solution":"Correction","section":'+number+(math?',"checks":[]':'')+'}}.',
+      math?'Lorsque tu annonces un résultat de rang, de dimension ou de coordonnées dans le corrigé, ajoute dans checks les données numériques et le résultat comme chaînes. Champs : type (rank, spanDimension, kernelDimension, sumDimension, intersectionDimension, coordinates), matrix, otherMatrix, vector et answer. Les vecteurs générateurs sont en colonnes. Sinon, checks reste vide.':''
+    ].join(' ')},{role:'user',content:JSON.stringify({matière:input.subject,niveau:level,langue:TEACHER_LANGUAGES[input.language],
+      sujet:input.topic,plan:input.lessonPlan,section:number,intitulé:input.lessonPlan[input.lessonIndex],précisions:input.notes})}]
+  };
+}
+
+function validatedTeacherSection(data,input) {
+  const objective=schoolText(data.objective,90);
+  const explanation=schoolText(data.explanation,720);
+  const example=schoolText(data.example,250);
+  const takeaway=schoolText(data.takeaway,95);
+  const prompt=schoolText(data.exercise?.prompt,150);
+  const solution=schoolText(data.exercise?.solution,700);
+  if(!objective||!takeaway||lessonWords(explanation)<40||lessonWords(example)<12||lessonWords(prompt)<4||lessonWords(solution)<12)return null;
+  const heading=input.lessonPlan[input.lessonIndex];
+  const checks=coachMathCourse(input)&&Array.isArray(data.exercise.checks)?data.exercise.checks.slice(0,4).map(checkLessonCalculation):[];
+  return {chapter:{objective,takeaway,section:{heading,explanation,example,diagram:lessonDiagramForHeading(heading)},
+    exercise:{prompt,solution,section:input.lessonIndex+1,checks}}};
+}
+
+async function schoolTeacherCourse(db,account) {
+  schoolRoles(account,'professeur');
+  const row=await schoolFirst(db,'SELECT context,chapters,revision FROM school_teacher_course_drafts WHERE teacher_id=?',[account.id]);
+  return row?{revision:row.revision,context:JSON.parse(row.context),chapters:JSON.parse(row.chapters)}:null;
+}
+
+async function schoolEditTeacherCourse(request,env,account) {
+  schoolRoles(account,'professeur');
+  const db=env.DB;
+  const data=await schoolJson(request,8192);
+  const course=await schoolTeacherCourse(db,account);
+  const changed=()=>new SchoolError(409,'Le brouillon du cours a changé. Rouvre-le pour reprendre.','course-changed');
+  if(data.revision!==(course?.revision||0))throw changed();
+  if(data.action==='start') {
+    const {classId,subject,level,language,topic,notes,lessonMode,lessonLevel,minutes,lessonPlan}=data.context||{};
+    const context=await schoolTeacherCoachContext(db,account,{profile:'teacher',task:'lesson',classId,subject,level,
+      language,topic,notes,lessonMode,lessonLevel,minutes,lessonPlan,lessonAction:'section',lessonIndex:0});
+    schoolRequire(teacherCoachRequest(context),'Vérifie le sujet, la matière, le niveau et le plan du cours.');
+    delete context.lessonAction;
+    delete context.lessonIndex;
+    context.lessonPlan=validateTeacherPlan(context.lessonPlan,context.lessonMode);
+    const result=await schoolRun(db,`INSERT INTO school_teacher_course_drafts(teacher_id,context) VALUES(?,?)
+      ON CONFLICT(teacher_id) DO UPDATE SET context=excluded.context,chapters='[]',revision=revision+1
+      WHERE school_teacher_course_drafts.revision=?`,[account.id,JSON.stringify(context),data.revision]);
+    if(!schoolChanged(result))throw changed();
+    return json({course:{context,chapters:[],revision:data.revision+1}});
+  }
+  schoolRequire(data.action==='next'&&course&&course.chapters.length<course.context.lessonPlan.length,
+    'Choisis un chapitre du plan à générer.');
+  const current=await schoolTeacherCoachContext(db,account,course.context);
+  schoolRequire(current.subject===course.context.subject&&current.level===course.context.level,
+    'La classe ou la matière du plan a changé. Valide un nouveau plan.');
+  const response=await replyToCoach(request,env,account,{...course.context,lessonAction:'section',lessonIndex:course.chapters.length});
+  if(!response.ok)return response;
+  const {chapter}=await response.json();
+  const chapters=[...course.chapters,chapter];
+  const result=await schoolRun(db,`UPDATE school_teacher_course_drafts SET chapters=?,revision=revision+1
+    WHERE teacher_id=? AND revision=?`,[JSON.stringify(chapters),account.id,course.revision]);
+  if(!schoolChanged(result))throw changed();
+  return json({course:{...course,chapters,revision:course.revision+1}});
 }
 
 function teacherLessonExerciseSchema(input) {
