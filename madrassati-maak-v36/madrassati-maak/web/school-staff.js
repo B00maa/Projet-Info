@@ -3,7 +3,8 @@
 const SCHOOL_ADMIN_DIRECTORY_VIEWS={
   comptes:{title:'Gestion des comptes',role:'',action:'Créer un compte'},
   eleves:{title:'Élèves inscrits',role:'eleve',action:'Ajouter un élève'},
-  professeurs:{title:'Professeurs',role:'professeur',action:'Ajouter un professeur'}
+  professeurs:{title:'Professeurs',role:'professeur',action:'Ajouter un professeur'},
+  parents:{title:'Parents',role:'parent',action:'Ajouter un parent'}
 };
 const SCHOOL_ADMIN_ACCOUNT_FILTERS=[
   ['','Tous les statuts'],['actif','Actifs'],['sans-acces','Accès scolaire à créer'],['suspendu','Suspendus'],['archives','Archives']
@@ -30,7 +31,7 @@ function schAccountStatus(member) {
 function schAccountActions(member) {
   const {id,role,active,login,archived_at:archived}=member;
   if(archived!=null)return `<button type="button" class="btn secondary small" data-school-action="account-archive" data-id="${id}">Restaurer</button>`;
-  return `${role!=='parent'?`<button type="button" class="btn secondary small" data-school-action="account-edit" data-id="${id}">Modifier</button>`:''}
+  return `<button type="button" class="btn secondary small" data-school-action="account-edit" data-id="${id}">Modifier</button>
     ${active?`<button type="button" class="btn secondary small" data-school-action="member-code" data-id="${id}">
       ${login?'Réinitialiser le code':'Créer un accès scolaire'}</button>`:''}
     <button type="button" class="btn secondary small" data-school-action="account-access" data-id="${id}">${active?'Suspendre':'Réactiver'}</button>
@@ -81,13 +82,17 @@ function schAccountsPage() {
   const directory=schoolUI.data.directory;
   const {name,role,status,classId}=schDirectoryFilters();
   const students=view.role==='eleve';
+  const noClasses=students&&!directory.classes.length;
+  const noStudents=view.role==='parent'&&!directory.accounts.some(a=>a.role==='eleve'&&a.active);
   return `<div class="school-title school-admin-heading"><h1>${view.title}</h1>
     <div class="admin-page-actions">
       ${!view.role||students?'<button class="btn secondary" type="button" data-school-action="school-import">Importer Excel ou CSV</button>':''}
-      <button class="btn primary" type="button" data-school-action="new-account" data-value="${view.role}" ${students&&!directory.classes.length?'disabled':''}>
+      <button class="btn primary" type="button" data-school-action="new-account" data-value="${view.role}" ${noClasses||noStudents?'disabled':''}>
         ${siteIcon('plus','sm')} ${view.action}</button>
     </div></div>
-    ${students&&!directory.classes.length?`<p class="school-note"><a href="#classes" class="text-link">Créer une classe</a></p>`:''}
+    ${noClasses?`<p class="school-note"><a href="#classes" class="text-link">Créer une classe</a></p>`:''}
+    ${noStudents?`<p class="school-note">Inscris d’abord un élève pour pouvoir lui associer un parent.
+      <a href="#eleves" class="text-link">Voir les élèves inscrits</a></p>`:''}
     <section class="card admin-directory">
       <div class="admin-filters school-workspace-filters">
         <div class="filter-field"><label for="schoolDirectoryName">Recherche</label><div class="search-box">${siteIcon('search')}
@@ -140,30 +145,47 @@ function schStudentClassField(selected='') {
 
 function schTeacherClassesFields(assignments=[]) {
   const {classes}=schoolUI.data.directory;
+  const subject=assignments.find(row=>row.subject?.trim())?.subject;
   return `<div><label for="schoolSubject">Matière</label><select id="schoolSubject" name="subject"
-    ${assignments.length?'required':''}>${schSubjectOptions(assignments[0]?.subject)}</select></div>
+    ${assignments.length?'required':''}>${schSubjectOptions(subject)}</select></div>
     <fieldset class="school-choices"><legend>Classes enseignées</legend>${classes.length?classes.map(c=>
-      `<label><input type="checkbox" name="teacherClass" value="${c.id}" ${assignments.some(row=>row.id===c.id)?'checked':''}>${schValue(c.name)}</label>`).join(''):
+      `<label><input type="checkbox" name="teacherClass" value="${c.id}" ${assignments.some(row=>row.id===c.id)?'checked':''}>
+        <span>${schValue(c.name)}</span></label>`).join(''):
       schEmpty('Crée une classe pour commencer.')}</fieldset>`;
+}
+
+function schParentChildrenField(parentId) {
+  const {accounts,classes,enrolments,guardians}=schoolUI.data.directory;
+  const classNames=new Map(classes.map(entry=>[entry.id,entry.name]));
+  const studentClasses=new Map(enrolments.map(entry=>[entry.student_id,classNames.get(entry.class_id)]));
+  const selected=new Set(guardians.filter(row=>row.parent_id===parentId).map(row=>row.student_id));
+  const students=accounts.filter(a=>a.role==='eleve'&&(a.active||selected.has(a.id)));
+  return `<fieldset class="school-choices"><legend>Élèves associés</legend>
+    ${students.length?students.map(student=>{
+      const className=studentClasses.get(student.id);
+      return `<label><input type="checkbox" name="child" value="${student.id}" ${selected.has(student.id)?'checked':''}>
+        <span>${schValue(student.name)}${className?` <small class="school-muted">· ${schValue(className)}</small>`:''}</span></label>`;
+    }).join(''):schEmpty('Aucun élève inscrit.')}</fieldset>`;
 }
 
 function schNewAccount(preferredRole) {
   const {classes,accounts}=schoolUI.data.directory;
-  const students=accounts.filter(a=>a.role==='eleve' && a.active);
-  const roles=[...(classes.length?['eleve']:[]),'professeur',...(students.length?['parent']:[])];
+  const hasStudents=accounts.some(a=>a.role==='eleve'&&a.active);
+  const roles=[...(classes.length?['eleve']:[]),'professeur',...(hasStudents?['parent']:[])];
+  const parent=preferredRole==='parent';
+  if(parent&&!hasStudents)return;
   const role=roles.includes(preferredRole)?preferredRole:roles[0];
   const classId=role==='eleve'?schDirectoryFilters().classId:'';
-  schShowDialog('Nouveau compte',`<form class="form" id="schoolAccountForm" data-school-form="account">
+  schShowDialog(parent?'Nouveau compte parent':'Nouveau compte',`<form class="form" id="schoolAccountForm" data-school-form="account">
     <div class="school-fields">
       <div><label for="schoolMemberName">Nom</label><input id="schoolMemberName" name="name" maxlength="100" required></div>
-      <div><label for="schoolMemberRole">Rôle</label><select name="role" id="schoolMemberRole">
-        ${roles.map(value=>schOpt(value,SCHOOL_ROLE_NAMES[value],role)).join('')}</select></div>
+      ${parent?'<input type="hidden" name="role" value="parent">':`<div><label for="schoolMemberRole">Rôle</label>
+        <select name="role" id="schoolMemberRole">${roles.map(value=>schOpt(value,SCHOOL_ROLE_NAMES[value],role)).join('')}</select></div>`}
       <div><label for="schoolMemberLogin">Identifiant scolaire (facultatif)</label><input id="schoolMemberLogin" name="login" dir="ltr" maxlength="40"></div>
     </div>
-    <div data-school-member="eleve" hidden>${schStudentClassField(classId)}</div>
-    <div class="school-stack" data-school-member="professeur" hidden>${schTeacherClassesFields()}</div>
-    <div data-school-member="parent" hidden><fieldset class="school-choices"><legend>Élèves associés</legend>
-      ${students.map(s=>`<label><input type="checkbox" name="child" value="${s.id}">${schValue(s.name)}</label>`).join('')}</fieldset></div>
+    ${parent?'':`<div data-school-member="eleve" hidden>${schStudentClassField(classId)}</div>
+      <div class="school-stack" data-school-member="professeur" hidden>${schTeacherClassesFields()}</div>`}
+    <div data-school-member="parent" hidden>${schParentChildrenField()}</div>
     <p class="school-muted school-small">Un code personnel sera affiché après la création du compte.</p>
     ${schError()}<div><button type="submit" class="btn primary">Créer le compte</button></div></form>`);
   schRoleInputs(role);
@@ -174,7 +196,8 @@ function schEditAccount(member) {
   const {enrolments}=schoolUI.data.directory;
   schShowDialog('Modifier le compte',`<form class="form" data-school-form="account-edit" data-id="${id}" data-role="${role}" data-revision="${revision}">
     <div><label for="schoolMemberName">Nom</label><input id="schoolMemberName" name="name" value="${schEsc(name)}" maxlength="100" required></div>
-    ${role==='eleve'?schStudentClassField(enrolments.find(row=>row.student_id===id)?.class_id):schTeacherClassesFields(schStaffClasses(id))}
+    ${role==='eleve'?schStudentClassField(enrolments.find(row=>row.student_id===id)?.class_id):
+      role==='parent'?schParentChildrenField(id):schTeacherClassesFields(schStaffClasses(id))}
     ${schError()}<div><button type="submit" class="btn primary">Enregistrer les modifications</button></div></form>`);
 }
 
@@ -508,7 +531,8 @@ function schStaffSubmit(form,button) {
       }});
     case 'account-edit':
       return schMutation(button,'/accounts/edit',{id:form.dataset.id,revision:Number(form.dataset.revision),name:data.name,
-        classIds:form.dataset.role==='eleve'?[data.studentClass]:values.getAll('teacherClass'),subject:data.subject},
+        classIds:form.dataset.role==='eleve'?[data.studentClass]:values.getAll('teacherClass'),subject:data.subject,
+        childIds:values.getAll('child')},
       'Le compte a été mis à jour.',{close:true});
     case 'account-archive': {
       const archived=form.dataset.archived==='true';
