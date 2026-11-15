@@ -492,6 +492,7 @@ function schGradeEditor(item) {
     ${item.editable?`<p id="schoolGradeDraftStatus" role="status" class="school-muted school-small">${item.draft?'Brouillon récupéré.':'Le brouillon s’enregistre automatiquement pendant la saisie.'}</p>`:''}
     <fieldset class="school-scores school-stack" id="schoolGradeFields"><legend class="sr-only">Notes de l’évaluation</legend>
       <div>${schGradeRows(current.id,item.draft?.scores||item.scores)}</div></fieldset>
+    ${item.editable?schGradeImportControls():''}
     ${schError()}<div class="school-actions"><button class="btn primary" type="submit">Enregistrer les notes</button>
       <button class="btn secondary" type="button" data-school-action="grade-workbook">Exporter le tableau Excel</button></div></form>`);
   schSyncEditor();
@@ -581,10 +582,15 @@ function schSyncEditor() {
   const open=period?.phase==='open'&&period.id===schoolUI.editor.periodId;
   schNode('schoolGradeFields').disabled=!open||schoolUI.editor.committing;
   form.querySelector('[type=submit]').disabled=!open||schoolUI.busy||schoolUI.editor.committing;
+  const importFile=schNode('schoolGradeImportFile');
+  if(importFile)importFile.disabled=!open||schoolUI.editor.committing;
+  const applyImport=form.querySelector('[data-school-action="grade-apply-import"]');
+  if(applyImport)applyImport.disabled=!open||schoolUI.editor.committing||!!schoolUI.editor.importPlan?.errors.length;
   schNode('schoolGradeHint').textContent=tr(open?'L’administration publie les notes après la saisie.':'Lecture seule');
 }
 
 function schStaffChange(target) {
+  if(target.id==='schoolGradeImportFile')return schGradeImportFile(target);
   if(target.id==='schoolMemberRole')schRoleInputs(target.value);
   if(target.name==='teacherClass') {
     const subject=target.form?.elements.namedItem('subject');
@@ -650,6 +656,7 @@ function schStaffSubmit(form,button) {
 
 function schStaffAction(button) {
   const {schoolAction:action,id}=button.dataset;
+  if(action==='grade-apply-import')return schApplyGradeImport();
   if(action==='new-account')return schNewAccount(button.dataset.value);
   if(action==='account-edit'||action==='account-archive') {
     const member=schoolUI.data.directory.accounts.find(account=>account.id===id);

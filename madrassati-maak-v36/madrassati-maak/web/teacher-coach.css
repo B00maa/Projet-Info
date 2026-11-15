@@ -95,6 +95,8 @@
 .teacher-lesson-sections p { margin: 0; white-space: pre-wrap; }
 .teacher-lesson-plan { display: grid; gap: 7px; padding: 12px; border: 1px solid #dce8dd; border-radius: 12px; }
 .teacher-lesson-plan small { line-height: 1.4; }
+.teacher-course-chapters { padding-inline-start: 1.35rem; margin: 0; }
+.teacher-course-chapters > li + li { margin-block-start: .65rem; }
 .teacher-lesson-plan .btn { justify-self: start; margin-block-start: 3px; }
 .teacher-lesson-additions { margin-block-start: 12px; }
 .teacher-lesson-additions summary, .teacher-calculations summary { color: #285340; font-weight: 700; cursor: pointer; }

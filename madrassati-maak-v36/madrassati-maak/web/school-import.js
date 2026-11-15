@@ -83,8 +83,9 @@ function schExcelArchive(buffer) {
 
 const schExcelNodes=(parent,name)=>[...parent.getElementsByTagNameNS('*',name)];
 const schExcelText=parent=>schExcelNodes(parent,'t').map(node=>node.textContent).join('');
+const SCHOOL_EXCEL_COMPUTED=Symbol('Excel computed cell');
 
-async function schExcelRows(bytes) {
+async function schExcelRows(bytes,{literalOnly=false}={}) {
   const read=schExcelArchive(bytes);
   const [workbook,relationships,strings]=await Promise.all([
     read('xl/workbook.xml'),read('xl/_rels/workbook.xml.rels'),read('xl/sharedStrings.xml',false)
@@ -108,7 +109,8 @@ async function schExcelRows(bytes) {
       if(index>=64)continue;
       const kind=cell.getAttribute('t');
       const value=schExcelNodes(cell,'v')[0]?.textContent||'';
-      values[index]=kind==='s'?shared[Number(value)]||'':kind==='inlineStr'?schExcelText(cell):value;
+      values[index]=literalOnly&&(['e','b'].includes(kind)||schExcelNodes(cell,'f').length)?SCHOOL_EXCEL_COMPUTED:
+        kind==='s'?shared[Number(value)]||'':kind==='inlineStr'?schExcelText(cell):value;
     }
     return values;
   });

@@ -132,7 +132,7 @@ const TEACHER_COACH_TEMPLATES = {
 
 function newTeacherCoach() {
   return {teacherId:'',access:'',task:'lesson',classId:null,subject:'',level:'',language:'',topic:'',notes:'',settings:{},drafts:{},request:null,
-    accessRequest:null,failure:'',feedback:'',localTopicsOpen:false,activity:'',course:null,courseLoad:null,courseLoaded:false,courseReadError:false};
+    accessRequest:null,failure:'',feedback:'',localTopicsOpen:false,activity:'',course:null,courses:[],courseLoad:null,courseLoaded:false,courseReadError:false};
 }
 
 let teacherCoach = newTeacherCoach();
@@ -270,7 +270,7 @@ function teacherCoachWorkspace(subject,classes) {
   if(teacherCoachSchool())contexts.push(['','Préparation libre']);
   const fullLesson=session.task==='lesson'&&session.settings.lesson?.lessonMode!=='session';
   const progress={plan:'Le coach propose un plan…',expand:'Le coach prépare l’approfondissement…',
-    section:'Le coach rédige le chapitre suivant…'}[session.activity]||
+    section:'Le coach rédige le chapitre suivant…','section-again':'Le coach rédige à nouveau le chapitre…'}[session.activity]||
     (fullLesson?'Le coach rédige les sections du cours et les exercices…':'Le coach prépare le document…');
   return `<div class="teacher-coach-types" role="group" aria-label="Type de document">${Object.entries(TEACHER_COACH_TASKS).map(([task,{label,icon:graphic}]) =>
     `<button type="button" data-action="teacher-coach-task" data-value="${task}" aria-pressed="${session.task === task}" ${busy ? 'disabled' : ''}>${teacherCoachTile(graphic,session.task === task ? 'mint' : '')}<span>${label}</span></button>`
@@ -573,8 +573,13 @@ function teacherCoachAction(action,value) {
     case 'teacher-coach-plan': proposeTeacherLessonPlan(); break;
     case 'teacher-course-start': changeTeacherCourse('start'); break;
     case 'teacher-course-next': changeTeacherCourse('next'); break;
-    case 'teacher-course-load': loadTeacherCourse(); break;
+    case 'teacher-course-load': loadTeacherCourse(teacherCoach.course?.id||'',true); break;
     case 'teacher-course-preview': showTeacherCourseDraft(); break;
+    case 'teacher-course-new': newTeacherCourse(); break;
+    case 'teacher-course-rename': teacherCourseForm(); break;
+    case 'teacher-course-duplicate': changeTeacherCourse('duplicate'); break;
+    case 'teacher-course-edit-chapter': teacherCourseForm(Number(value)); break;
+    case 'teacher-course-regenerate': changeTeacherCourse('regenerate',Number(value)); break;
     case 'teacher-coach-expand': expandTeacherLessonSection(value); break;
     case 'teacher-coach-checks': {
       const correction=document.querySelector('#teacherCoachOutput .teacher-coach-correction');

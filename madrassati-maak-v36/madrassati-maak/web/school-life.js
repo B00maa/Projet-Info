@@ -84,6 +84,54 @@ function schParentLifeSummary() {
       '<p class="school-muted">Aucune action en attente.</p>'}</section>`;
 }
 
+function schTodayPage() {
+  const {today,upcoming,dueHomework,missedSessions}=schoolUI.data;
+  return `<div class="school-title"><h1>Aujourd’hui</h1><span class="school-muted">${schValue(schDate(today))}</span></div>
+    ${schFatigueBanner()}<div class="school-grid">
+      <section class="card school-full school-stack"><div class="school-session-top"><h2>Prochaines séances</h2>
+        <a class="text-link" href="#planning">Voir le planning</a></div>
+        ${upcoming.length?upcoming.map(schSessionRow).join(''):schEmpty('Aucune séance à venir.')}</section>
+      <section class="card school-stack"><div class="school-session-top"><h2>Devoirs à rendre</h2><a class="text-link" href="#devoirs">Tous les devoirs</a></div>
+        ${dueHomework.length?dueHomework.map(item=>`<article class="school-session school-session-top">
+          <div><h3>${schValue(item.title)}</h3><div class="school-meta">${schValue(item.subject+' · '+schDate(item.due_date))}</div></div>
+          <button type="button" class="btn secondary small" data-school-action="homework" data-id="${item.id}">Ouvrir le devoir</button></article>`).join(''):
+          schEmpty('Aucun devoir à rendre dans les sept prochains jours.')}</section>
+      <section class="card school-stack"><div class="school-session-top"><h2>Cours à rattraper</h2><a class="text-link" href="#rattrapage">Voir le rattrapage</a></div>
+        ${missedSessions.length?missedSessions.map(item=>`<article class="school-session school-session-top">
+          <div><h3>${schValue(item.title)}</h3>${schSessionMeta(item)}</div>
+          <a class="btn secondary small" href="#rattrapage?seance=${item.id}">Rattraper la séance</a></article>`).join(''):
+          schEmpty('Aucune séance manquée à rattraper.')}</section>
+    </div>`;
+}
+
+function schFamilyPage() {
+  const {family}=schoolUI.data;
+  const action=(child,page,label)=>`<button type="button" class="btn secondary small" data-school-action="family-child"
+    data-id="${child.id}" data-value="${page}">${label}<span class="sr-only"> · ${schValue(child.name)}</span></button>`;
+  return `<div class="school-title"><h1>Vue famille</h1></div>
+    ${family.length?`<div class="school-grid">${family.map(child=>`<section class="card school-stack">
+      <div class="school-session-top"><div><h2>${schValue(child.name)}</h2>
+        ${child.class_name?`<p class="school-meta">${schValue(child.class_name)}</p>`:''}</div>
+        ${action(child,'semaine','Voir le résumé')}</div>
+      <div class="school-actions">
+        ${child.absences?action(child,'absences','<span>Absences à justifier</span> · '+schValue(child.absences)):''}
+        ${child.fatigue?action(child,'fatigue','Demande de mode fatigue'):''}
+      </div>
+      <h3>Échéances des devoirs</h3>
+      ${child.homework.length?`<ul class="school-family-deadlines">${child.homework.map(item=>`<li>
+        ${schValue(item.title)} · <time datetime="${item.due_date}">${schValue(schDate(item.due_date))}</time></li>`).join('')}</ul>
+        <div>${action(child,'devoirs','Voir les devoirs')}</div>`:schEmpty('Aucun devoir à rendre dans les sept prochains jours.')}
+    </section>`).join('')}</div>`:`<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`}`;
+}
+
+function schFamilyChild(id,page) {
+  const data=schoolUI.data;
+  if(data.account.role!=='parent'||!data.children.some(child=>child.id===id)||!['semaine','absences','fatigue','devoirs'].includes(page))return;
+  schoolUI.child=id;
+  schoolUI.week='';
+  location.hash=page;
+}
+
 async function schFetchDialog(button,path,render) {
   button.disabled=true;
   try {
