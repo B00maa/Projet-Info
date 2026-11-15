@@ -82,19 +82,48 @@ function validatedTeacherSection(data,input) {
     exercise:{prompt,solution,section:input.lessonIndex+1,checks}}};
 }
 
-async function schoolTeacherCourse(db,account) {
+async function schoolTeacherCourse(db,account,id) {
   schoolRoles(account,'professeur');
-  const row=await schoolFirst(db,'SELECT context,chapters,revision FROM school_teacher_course_drafts WHERE teacher_id=?',[account.id]);
-  return row?{revision:row.revision,context:JSON.parse(row.context),chapters:JSON.parse(row.chapters)}:null;
+  if(id)schoolRequire(schoolId(id),'Cours invalide.');
+  const row=await schoolFirst(db,`SELECT id,name,context,chapters,revision FROM school_teacher_course_drafts WHERE teacher_id=?
+    ${id?'AND id=?':''} ORDER BY updated_at DESC,id LIMIT 1`,id?[account.id,id]:[account.id]);
+  if(id&&!row)throw new SchoolError(404,'Ce cours est introuvable.');
+  return row?{...row,context:JSON.parse(row.context),chapters:JSON.parse(row.chapters)}:null;
+}
+
+async function schoolTeacherCourseLibrary(db,account,id) {
+  const course=await schoolTeacherCourse(db,account,id);
+  const courses=await schoolAll(db,`SELECT id,name FROM school_teacher_course_drafts
+    WHERE teacher_id=? ORDER BY updated_at DESC,id`,[account.id]);
+  return {course,courses};
+}
+
+function schoolEditedChapter(course,index,data) {
+  const prior=course.chapters[index];
+  const context={...course.context,lessonPlan:[...course.context.lessonPlan]};
+  context.lessonPlan[index]=data.heading;
+  const plan=validateTeacherPlan(context.lessonPlan,context.lessonMode);
+  const objective=schoolText(data.objective,90);
+  const explanation=schoolText(data.explanation,720);
+  const example=schoolText(data.example,250);
+  const takeaway=schoolText(data.takeaway,95);
+  const prompt=schoolText(data.prompt,150);
+  const solution=schoolText(data.solution,700);
+  schoolRequire(plan&&objective&&explanation&&(data.example==null||typeof data.example==='string'&&(!data.example.trim()||example))&&
+    takeaway&&prompt&&solution,
+    'Vérifie les champs du chapitre et le titre dans le plan.');
+  context.lessonPlan=plan;
+  const heading=plan[index];
+  const checks=prompt===prior.exercise.prompt&&solution===prior.exercise.solution?prior.exercise.checks:[];
+  return {context,chapter:{objective,takeaway,section:{...prior.section,heading,explanation,example,diagram:lessonDiagramForHeading(heading)},
+    exercise:{prompt,solution,section:index+1,checks}}};
 }
 
 async function schoolEditTeacherCourse(request,env,account) {
   schoolRoles(account,'professeur');
   const db=env.DB;
   const data=await schoolJson(request,8192);
-  const course=await schoolTeacherCourse(db,account);
   const changed=()=>new SchoolError(409,'Le brouillon du cours a changé. Rouvre-le pour reprendre.','course-changed');
-  if(data.revision!==(course?.revision||0))throw changed();
   if(data.action==='start') {
     const {classId,subject,level,language,topic,notes,lessonMode,lessonLevel,minutes,lessonPlan}=data.context||{};
     const context=await schoolTeacherCoachContext(db,account,{profile:'teacher',task:'lesson',classId,subject,level,
@@ -103,25 +132,58 @@ async function schoolEditTeacherCourse(request,env,account) {
     delete context.lessonAction;
     delete context.lessonIndex;
     context.lessonPlan=validateTeacherPlan(context.lessonPlan,context.lessonMode);
-    const result=await schoolRun(db,`INSERT INTO school_teacher_course_drafts(teacher_id,context) VALUES(?,?)
-      ON CONFLICT(teacher_id) DO UPDATE SET context=excluded.context,chapters='[]',revision=revision+1
-      WHERE school_teacher_course_drafts.revision=?`,[account.id,JSON.stringify(context),data.revision]);
-    if(!schoolChanged(result))throw changed();
-    return json({course:{context,chapters:[],revision:data.revision+1}});
+    const id=crypto.randomUUID();
+    const name=context.topic.trim();
+    await schoolRun(db,`INSERT INTO school_teacher_course_drafts(id,teacher_id,name,context,updated_at) VALUES(?,?,?,?,?)`,
+      [id,account.id,name,JSON.stringify(context),Date.now()]);
+    return json({course:{id,name,context,chapters:[],revision:1}});
   }
-  schoolRequire(data.action==='next'&&course&&course.chapters.length<course.context.lessonPlan.length,
-    'Choisis un chapitre du plan à générer.');
-  const current=await schoolTeacherCoachContext(db,account,course.context);
-  schoolRequire(current.subject===course.context.subject&&current.level===course.context.level,
-    'La classe ou la matière du plan a changé. Valide un nouveau plan.');
-  const response=await replyToCoach(request,env,account,{...course.context,lessonAction:'section',lessonIndex:course.chapters.length});
-  if(!response.ok)return response;
-  const {chapter}=await response.json();
-  const chapters=[...course.chapters,chapter];
-  const result=await schoolRun(db,`UPDATE school_teacher_course_drafts SET chapters=?,revision=revision+1
-    WHERE teacher_id=? AND revision=?`,[JSON.stringify(chapters),account.id,course.revision]);
+  schoolRequire(data.id==null||schoolId(data.id),'Cours invalide.');
+  if(!data.id) {
+    const rows=await schoolAll(db,'SELECT id FROM school_teacher_course_drafts WHERE teacher_id=? LIMIT 2',[account.id]);
+    if(rows.length!==1)throw changed();
+    data.id=rows[0].id;
+  }
+  const course=await schoolTeacherCourse(db,account,data.id);
+  if(data.revision!==course.revision)throw changed();
+  const scope=[course.id,account.id,course.revision];
+  if(data.action==='duplicate') {
+    const id=crypto.randomUUID();
+    const name=course.name.slice(0,112)+' (copie)';
+    const result=await schoolRun(db,`INSERT INTO school_teacher_course_drafts(id,teacher_id,name,context,chapters,updated_at)
+      SELECT ?,teacher_id,?,context,chapters,? FROM school_teacher_course_drafts WHERE id=? AND teacher_id=? AND revision=?`,
+    [id,name,Date.now(),...scope]);
+    if(!schoolChanged(result))throw changed();
+    return json({course:{...course,id,name,revision:1}});
+  }
+  const edited={...course,revision:course.revision+1};
+  if(data.action==='rename') {
+    edited.name=schoolText(data.name,120);
+    schoolRequire(edited.name,'Indique un nom pour le cours.');
+  } else if(data.action==='edit-chapter') {
+    schoolRequire(Number.isInteger(data.index)&&course.chapters[data.index]&&data.fields&&typeof data.fields==='object',
+      'Choisis un chapitre à modifier.');
+    const {context,chapter}=schoolEditedChapter(course,data.index,data.fields);
+    edited.context=context;
+    edited.chapters=course.chapters.map((row,i)=>i===data.index?chapter:row);
+  } else {
+    const next=data.action==='next';
+    const index=next?course.chapters.length:data.index;
+    schoolRequire((next||data.action==='regenerate')&&Number.isInteger(index)&&index>=0&&
+      index<(next?course.context.lessonPlan.length:course.chapters.length),'Choisis un chapitre du plan à générer.');
+    const current=await schoolTeacherCoachContext(db,account,course.context);
+    schoolRequire(current.subject===course.context.subject&&current.level===course.context.level,
+      'La classe ou la matière du plan a changé. Valide un nouveau plan.');
+    const response=await replyToCoach(request,env,account,{...course.context,lessonAction:'section',lessonIndex:index});
+    if(!response.ok)return response;
+    const {chapter}=await response.json();
+    edited.chapters=[...course.chapters];
+    edited.chapters[index]=chapter;
+  }
+  const result=await schoolRun(db,`UPDATE school_teacher_course_drafts SET name=?,context=?,chapters=?,updated_at=?,revision=revision+1
+    WHERE id=? AND teacher_id=? AND revision=?`,[edited.name,JSON.stringify(edited.context),JSON.stringify(edited.chapters),Date.now(),...scope]);
   if(!schoolChanged(result))throw changed();
-  return json({course:{...course,chapters,revision:course.revision+1}});
+  return json({course:edited});
 }
 
 function teacherLessonExerciseSchema(input) {

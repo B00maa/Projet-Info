@@ -288,10 +288,26 @@ async function schoolDirectory(db,account) {
   return {};
 }
 
+async function schoolFamilyOverview(db,children,until) {
+  const ids=JSON.stringify(children.map(child=>child.id));
+  const [rows,homework]=await Promise.all([
+    schoolAll(db,`SELECT a.id,a.name,c.name AS class_name,
+      (SELECT COUNT(*) FROM school_attendance p WHERE p.student_id=a.id AND p.status='absent'
+        AND p.justification_status IS NOT 'accepted') AS absences,
+      EXISTS (SELECT 1 FROM school_fatigue_requests f WHERE f.student_id=a.id AND f.status='pending'
+        AND f.requested_at>${SCHOOL_CLOCK}-?) AS fatigue
+      FROM school_accounts a LEFT JOIN school_enrolments e ON e.student_id=a.id
+      LEFT JOIN school_classes c ON c.id=e.class_id WHERE a.id IN (SELECT value FROM json_each(?))
+      ORDER BY a.name,a.id`,[SCHOOL_FATIGUE_REPLY_WINDOW,ids]),
+    schoolDueHomework(db,children,until,3)
+  ]);
+  return rows.map(child=>({...child,homework:homework.filter(row=>row.student_id===child.id)}));
+}
+
 async function schoolState(db,account,url) {
   const week = schoolWeek(url.searchParams.get('week'));
   const requestedView=url.searchParams.get('view');
-  const view=requestedView||({administration:'dashboard',professeur:'dashboard',eleve:'planning',parent:'semaine'})[account.role];
+  const view=requestedView||({administration:'dashboard',professeur:'dashboard',eleve:'aujourdhui',parent:'famille'})[account.role];
   const children = await schoolChildren(db,account);
   const child = schoolChild(children,url.searchParams.get('child'));
   const scope = schoolSessionScope(account,child);
@@ -304,7 +320,7 @@ async function schoolState(db,account,url) {
   ]);
   const state = {account,view,week,children,child,directory,now:Date.now(),period:schoolPeriodView(period),
     sessions:sessions.map(schoolSessionView),notices,fatigue,teacherFatigue};
-  if (account.role === 'eleve' && (!requestedView||view==='rattrapage')) {
+  if (account.role === 'eleve' && view==='rattrapage') {
     const [previous,progress,missed]=await Promise.all([
       schoolSessions(db,scope,'s.date<=?',[schoolToday()],true),
       schoolAll(db,'SELECT session_id,step FROM school_catchup WHERE student_id=?',[account.id]),
@@ -335,11 +351,23 @@ async function schoolState(db,account,url) {
   if (view==='evaluations') attach('assessments',schoolAssessments(db,account,child));
   if (view==='absences'||(view==='semaine'&&account.role==='parent')) attach('absences',schoolAbsences(db,account,child));
   if (view==='devoirs'&&canSeeHomework) attach('homework',schoolHomeworkList(db,account,child));
+  if (account.role==='eleve'&&view==='aujourdhui') {
+    const today=schoolToday();
+    const until=schoolDay(Date.parse(today)+7*SCHOOL_DAY);
+    state.today=today;
+    attach('upcoming',schoolUpcomingSessions(db,scope,4));
+    attach('dueHomework',schoolDueHomework(db,children,until,6));
+    attach('missedSessions',schoolSessions(db,scope,`s.date<=?
+      AND EXISTS (SELECT 1 FROM school_attendance p WHERE p.session_id=s.id AND p.student_id=? AND p.status='absent')
+      AND NOT EXISTS (SELECT 1 FROM school_catchup c WHERE c.session_id=s.id AND c.student_id=? AND c.step>=3)`,
+    [today,account.id,account.id],true,12).then(rows=>rows.filter(schoolSessionEnded).slice(0,6).map(schoolSessionView)));
+  }
+  if (account.role==='parent'&&view==='famille') {
+    const today=schoolToday();
+    attach('family',schoolFamilyOverview(db,children,schoolDay(Date.parse(today)+7*SCHOOL_DAY)));
+  }
   if (account.role==='professeur'&&view==='dashboard') {
-    const [today,time]=schoolMoroccoClock.format(Date.now()).replace(' ','T').split('T');
-    const [hour,minute]=time.split(':').map(Number);
-    attach('upcoming',schoolSessions(db,scope,'s.date>? OR (s.date=? AND s.start_minute+s.duration>?)',
-      [today,today,hour*60+minute],false,4).then(rows=>rows.map(schoolSessionView)));
+    attach('upcoming',schoolUpcomingSessions(db,scope,4));
     attach('homeworkToCorrect',schoolHomeworkList(db,account,null).then(rows=>
       rows.filter(row=>row.submitted>row.corrected).length));
   }
@@ -446,7 +474,7 @@ async function handleSchool(request,env,url) {
     }
     if (request.method === 'GET') {
       if (route === '/state') return json(await schoolState(db,account,url));
-      if (route === '/coach/course') return json({course:await schoolTeacherCourse(db,account)});
+      if (route === '/coach/course') return json(await schoolTeacherCourseLibrary(db,account,url.searchParams.get('id')));
       if (route === '/coach/status') {
         schoolRoles(account,'professeur','eleve');
         return json({status:coachProviders(env,account.role==='professeur',true).length?'ready':'needs-key'});
