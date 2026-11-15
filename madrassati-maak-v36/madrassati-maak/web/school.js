@@ -9,7 +9,7 @@ const schShowSetup = () => ['ready','missing-code','invalid-code'].includes(scho
 const SCHOOL_ROLE_NAMES={administration:'Administration',professeur:'Professeur',eleve:'Élève',parent:'Parent'};
 const SCHOOL_NAV={
   administration:[['dashboard','Vue d’ensemble'],['planning','Planning des séances'],['absences','Absences et justificatifs'],
-    ['classes','Classes'],['eleves','Élèves inscrits'],['professeurs','Professeurs'],['notes','Périodes et résultats'],
+    ['classes','Classes'],['eleves','Élèves inscrits'],['professeurs','Professeurs'],['parents','Parents'],['notes','Périodes et résultats'],
     ['evaluations','Évaluations'],['comptes','Gestion des comptes'],['bibliotheque','Bibliothèque'],
     ['statistiques','Statistiques'],['messages','Messagerie'],['annonces','Annonces'],['parametres','Paramètres']],
   professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes classes'],['eleves','Mes élèves'],
@@ -213,6 +213,38 @@ function schShowDialog(title,markup) {
   if(!schDialog().open)schDialog().showModal();
 }
 
+const schCanChangePassword=account=>account.auth==='school'&&['professeur','eleve','parent'].includes(account.role);
+
+function schPasswordDialog() {
+  schShowDialog('Changer le mot de passe',`<form class="form" data-school-form="change-password">
+    <div><label for="schoolCurrentPassword">Mot de passe actuel</label>
+      <input id="schoolCurrentPassword" name="currentPassword" type="password" dir="auto"
+        autocomplete="current-password" maxlength="256" required></div>
+    <div><label for="schoolNewPassword">Nouveau mot de passe</label>
+      <input id="schoolNewPassword" name="newPassword" type="password" dir="auto"
+        autocomplete="new-password" minlength="15" maxlength="256" aria-describedby="schoolPasswordHelp" required>
+      <p id="schoolPasswordHelp" class="school-muted school-small">Utilise une phrase de 15 à 128 caractères que tu peux retenir.</p></div>
+    <div><label for="schoolConfirmPassword">Confirmer le nouveau mot de passe</label>
+      <input id="schoolConfirmPassword" name="confirmation" type="password" dir="auto"
+        autocomplete="new-password" minlength="15" maxlength="256" required></div>
+    ${schError()}<div><button type="submit" class="btn primary">Enregistrer le nouveau mot de passe</button></div>
+  </form>`);
+  schNode('schoolCurrentPassword').focus();
+}
+
+function schPasswordSubmit(form,button) {
+  const values=new FormData(form);
+  const currentPassword=values.get('currentPassword');
+  const newPassword=values.get('newPassword');
+  if(newPassword.normalize('NFC')!==values.get('confirmation').normalize('NFC')) {
+    form.querySelector('[data-school-error]').textContent=tr('Les deux nouveaux mots de passe doivent être identiques.');
+    schNode('schoolConfirmPassword').focus();
+    return;
+  }
+  return schMutation(button,'/auth/password',{currentPassword,newPassword},
+    'Mot de passe modifié. Les autres sessions ont été fermées.',{close:true});
+}
+
 function schClearPreview() {
   if (schoolUI.previewUrl) URL.revokeObjectURL(schoolUI.previewUrl);
   schoolUI.previewUrl='';
@@ -227,8 +259,8 @@ function schAuth() {
       <div><h2>Connexion scolaire</h2><p class="school-muted school-small">Utilisez les accès remis par votre établissement.</p></div>
       <div><label for="schoolLoginId">Identifiant scolaire</label><input id="schoolLoginId" name="login" dir="ltr"
         autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required></div>
-      <div><label for="schoolLoginCode">Code personnel</label><input id="schoolLoginCode" type="password" name="code" dir="ltr"
-        autocomplete="current-password" maxlength="48" required></div>
+      <div><label for="schoolLoginCode">Mot de passe ou code personnel</label><input id="schoolLoginCode" type="password" name="code" dir="auto"
+        autocomplete="current-password" maxlength="256" required></div>
       ${schError()}<div><button type="submit" class="btn primary">Se connecter à l’école</button></div></form>
       <p class="school-muted school-small">Élèves, parents, professeurs et administration</p>
       <div id="schoolSetupAction" ${schShowSetup()?'':'hidden'}><button type="button" class="btn secondary"
@@ -252,6 +284,7 @@ function schHeaderTools(data,staff=false) {
       ${staff?schStaffAvatar(data.account.name):''}<div><strong>${schValue(data.account.name)}</strong>
         ${!staff||data.account.name!==SCHOOL_ROLE_NAMES[data.account.role]?'<span>'+SCHOOL_ROLE_NAMES[data.account.role]+'</span>':''}</div></div>
       <button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>
+      ${schCanChangePassword(data.account)?'<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':''}
       ${data.account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
         '<a class="btn secondary small" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top">Se déconnecter</a>'}`:''}
       <button type="button" class="btn secondary small" data-school-action="language" aria-label="${state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe'}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button></div>`;
@@ -281,7 +314,7 @@ function schRender() {
     <select id="schoolChild">${data.children.map(child=>schOpt(child.id,child.name,data.child?.id)).join('')}</select></div>`:'';
   const content={dashboard:admin?schAdminDashboard:schTeacherDashboard,classes:admin?schAdminClasses:schTeacherClasses,
     eleves:admin?schAccountsPage:schTeacherStudents,professeurs:schAccountsPage,presences:schTeacherAttendance,
-    comptes:schAccountsPage,statistiques:schAdminStatistics,parametres:schAdminSettings,
+    comptes:schAccountsPage,parents:schAccountsPage,statistiques:schAdminStatistics,parametres:schAdminSettings,
     planning:schPlanningPage,notes:schNotesPage,rattrapage:schCatchupPage,semaine:schParentPage,
     absences:schAbsencesPage,fatigue:schFatiguePage,cours:schCoursesPage,bibliotheque:schLibraryPage,devoirs:schHomeworkPage,
     evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,
@@ -538,6 +571,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     }
     if(!event.target.matches('[data-school-form]'))return;
     event.preventDefault();
+    if(event.target.dataset.schoolForm==='change-password')return schPasswordSubmit(event.target,event.submitter);
     if(!schLifeSubmit(event.target,event.submitter))schStaffSubmit(event.target,event.submitter);
   });
   document.addEventListener('click',event=>{
@@ -574,6 +608,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     else if(action==='activate-administration'&&schShowSetup())schSetupDialog();
     else if(action==='download-codes'&&schDialog().open&&schoolUI.credentials)schCodesWorkbook();
     else if(!schoolUI.data)return;
+    else if(action==='change-password'&&schCanChangePassword(schoolUI.data.account))schPasswordDialog();
     else if(action==='staff-menu')schStaffMenu(true);
     else if(action==='staff-menu-close')schStaffMenu(false);
     else if(action==='week'){

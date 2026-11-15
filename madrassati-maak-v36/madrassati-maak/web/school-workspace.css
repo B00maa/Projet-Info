@@ -97,7 +97,7 @@
 .school-staff-topbar .school-user > .avatar { display: inline-flex; color: #476339; }
 .school-staff-topbar .school-user > div { max-inline-size: 180px; overflow-wrap: anywhere; }
 .school-staff-topbar .breadcrumb strong { color: #294f3d; }
-.school-staff-topbar .school-header-tools { flex-wrap: nowrap; gap: .5rem; justify-content: flex-end; }
+.school-staff-topbar .school-header-tools { gap: .5rem; }
 .school-staff-topbar .school-header-tools .btn { text-align: center; }
 .school-staff-topbar .breadcrumb .icon { flex-shrink: 0; }
 

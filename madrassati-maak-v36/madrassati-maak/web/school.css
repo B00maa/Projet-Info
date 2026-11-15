@@ -85,9 +85,21 @@
 .school-dialog::backdrop { background: #193c3155; }
 .school-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-block-end: 1px solid var(--school-line); padding: 1rem 1.3rem; }
 #schoolDialogBody { padding: 1.1rem 1.3rem 1.3rem; }
-.school-choices { border: 1px solid var(--school-line); padding: .6rem; border-radius: 10px; max-block-size: 13rem; overflow: auto; }
+.school-choices { border: 1px solid var(--school-line); padding: .6rem; border-radius: 10px; min-inline-size: 0; max-block-size: 13rem; overflow: auto; }
 .school-choices legend { padding-inline: .35rem; font-weight: 650; }
-.school-choices label { display: flex; align-items: center; gap: .45rem; margin: .3rem 0; }
+.school-choices label { display: flex; align-items: center; gap: .65rem; padding: .4rem; margin: .12rem 0; cursor: pointer; }
+.school-choices label > span { min-inline-size: 0; overflow-wrap: anywhere; }
+.school-body .form .school-choices input[type="checkbox"] {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  min-inline-size: 0;
+  min-block-size: 0;
+  flex: none;
+  padding: 0;
+  margin: 0;
+  accent-color: #285d42;
+  cursor: pointer;
+}
 .school-scores { padding: 0; border: 0; min-inline-size: 0; }
 .school-scores:disabled input { background: #f5f7f4; color: var(--school-ink); }
 .school-table { border-collapse: collapse; inline-size: 100%; }
@@ -152,6 +164,8 @@
   .school-header-tools .school-user { display: none; }
 }
 @media (max-width: 480px) {
+  .school-header { flex-wrap: wrap; gap: .5rem; }
+  .school-header .school-header-tools { justify-content: flex-start; }
   .school-fields { grid-template-columns: minmax(0,1fr); }
   .school-table th,.school-table td { padding: .55rem; }
   .school-main { padding-inline: .8rem; }
