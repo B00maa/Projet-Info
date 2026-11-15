@@ -7,6 +7,9 @@ const GROQ_TEACHER_COACH={
 };
 const GROQ_STUDENT_COACH={...GROQ_TEACHER_COACH,model:'openai/gpt-oss-20b'};
 const GROQ_BACKUP_COACH={...GROQ_TEACHER_COACH,model:'qwen/qwen3.8-27b',reasoning:'none',strictSchema:false};
+const CEREBRAS_COACH={
+  url:'https://api.cerebras.ai/v1/chat/completions',model:'qwen-3.8-27b',secret:'CEREBRAS_API_KEY',reasoning:'none'
+};
 const MAX_CHAT_BODY = 192 * 1024;
 const COACH_DRAFT_FAILURES=['invalid-response','empty-answer','incomplete','lesson-incomplete'];
 const STUDENT_COACH_PROMPT = [
@@ -32,7 +35,7 @@ function json(body,status = 200,headers = {}) {
 function coachProviders(env,teacher,school=false) {
   const groq=teacher?[GROQ_TEACHER_COACH,GROQ_STUDENT_COACH,GROQ_BACKUP_COACH]:
     school?[GROQ_STUDENT_COACH,GROQ_TEACHER_COACH,GROQ_BACKUP_COACH]:[];
-  return [...groq,DEEPSEEK_COACH].filter(provider=>env[provider.secret]?.trim());
+  return [...groq,...(school?[CEREBRAS_COACH]:[]),DEEPSEEK_COACH].filter(provider=>env[provider.secret]?.trim());
 }
 
 function coachAuthorization(request,env) {
@@ -323,7 +326,8 @@ async function replyToCoach(request,env,account) {
   }
   const parameters = teacher ? teacherCoachRequest(input) : studentCoachRequest(input);
   if (!parameters) return json({status:'invalid'},400);
-  if (account&&!await schoolCoachLimit(env.DB,account)) return json({status:'school-rate-limit',retryAfter:300},429,{'Retry-After':'300'});
+  const retryAfter=account?await schoolCoachRetryAfter(env.DB,account):0;
+  if(retryAfter)return json({status:'school-rate-limit',retryAfter},429,{'Retry-After':String(retryAfter)});
   const lesson=teacher&&input.task==='lesson';
   // A configurable single-provider installation can still repair malformed documents.
   if(teacher&&providers.length===1)providers.push(providers[0]);
@@ -335,7 +339,8 @@ async function replyToCoach(request,env,account) {
     const remaining=deadline-Date.now();
     if(remaining<=0||request.signal.aborted)break;
     if(unusableSecrets.has(provider.secret))continue;
-    if(provider===GROQ_BACKUP_COACH&&failures.length>=2&&failures.every(failure=>COACH_DRAFT_FAILURES.includes(failure.status)))continue;
+    if((provider===GROQ_BACKUP_COACH||provider===CEREBRAS_COACH)&&
+      failures.length>=2&&failures.every(failure=>COACH_DRAFT_FAILURES.includes(failure.status)))continue;
     const apiKey=env[provider.secret].trim().replace(/^(["'])([\s\S]*)\1$/,'$2').replace(/^Bearer[ \t]+/i,'').trim();
     if(!/^[!-~]+$/.test(apiKey)) {
       failures.push({status:'provider-auth',detail:'credential-format'});
