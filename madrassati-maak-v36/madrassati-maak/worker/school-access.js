@@ -2,6 +2,8 @@ const SCHOOL_STUDENT_SUFFIX = '@eleve.madrassati.invalid';
 const SCHOOL_COOKIE = '__Host-madrassati-school';
 const SCHOOL_LOGIN_LIFE = 12 * 60 * 60 * 1000;
 const SCHOOL_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const SCHOOL_PASSWORD_ITERATIONS = 100000;
+const SCHOOL_PASSWORD_VERIFIER = new RegExp('^pbkdf2-sha256\\$'+SCHOOL_PASSWORD_ITERATIONS+'\\$([A-Za-z0-9_-]{22})\\$([A-Za-z0-9_-]{43})$');
 const SCHOOL_IMPORT_LIMIT = 200;
 
 const schoolNormalizeLogin = value => schoolText(value,40).toLowerCase();
@@ -11,6 +13,39 @@ const schoolNewLogin = (id,role='eleve') =>
 const schoolNativeEmail = email => schoolEmailValid(email) && !email.endsWith(SCHOOL_STUDENT_SUFFIX);
 const schoolBase64 = bytes => btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
 const schoolDigest = async text => schoolBase64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))));
+const schoolLoginCode = value => schoolText(value,48).replace(/[ -]/g,'').toUpperCase();
+
+function schoolPasswordValue(value) {
+  if(typeof value!=='string'||value.length>256||/[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u.test(value)) return '';
+  const password=value.normalize('NFC');
+  return [...password].length<=128?password:'';
+}
+
+async function schoolPasswordDigest(password,salt) {
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:SCHOOL_PASSWORD_ITERATIONS},key,256);
+  return schoolBase64(new Uint8Array(bits));
+}
+
+function schoolDigestMatches(actual,expected) {
+  if(actual.length!==expected.length) return false;
+  let difference=0;
+  for(let i=0;i<actual.length;i++) difference|=actual.charCodeAt(i)^expected.charCodeAt(i);
+  return difference===0;
+}
+
+async function schoolAccessMatches(value,stored) {
+  if(/^[A-Za-z0-9_-]{43}$/.test(stored)) {
+    const code=schoolLoginCode(value);
+    return code.length===24&&[...code].every(letter=>SCHOOL_CODE_ALPHABET.includes(letter))&&
+      schoolDigestMatches(await schoolDigest(code),stored);
+  }
+  const verifier=SCHOOL_PASSWORD_VERIFIER.exec(stored);
+  const password=schoolPasswordValue(value);
+  if(!verifier||!password) return false;
+  const salt=Uint8Array.from(atob(verifier[1].replaceAll('-','+').replaceAll('_','/')+'=='),letter=>letter.charCodeAt(0));
+  return schoolDigestMatches(await schoolPasswordDigest(password,salt),verifier[2]);
+}
 
 async function schoolNewCredential(login) {
   const random=crypto.getRandomValues(new Uint8Array(15));
@@ -42,11 +77,15 @@ async function schoolSessionAccount(db,token) {
     WHERE s.token_digest=? AND s.expires_at>?`,[await schoolDigest(token),Date.now()]);
 }
 
+async function schoolAttemptLimit(db,key,maximum,now) {
+  const limit=await schoolFirst(db,'SELECT failures FROM school_login_limits WHERE client_key=? AND expires_at>?',[key,now]);
+  if(limit?.failures>=maximum) throw new SchoolError(429,'Trop de tentatives. Réessaie dans quelques minutes.');
+}
+
 async function schoolClientLimit(request,db,scope,maximum,now) {
   const ip=request.headers.get('cf-connecting-ip')||'unknown';
   const key=await schoolDigest(scope+':'+ip);
-  const limit=await schoolFirst(db,'SELECT failures FROM school_login_limits WHERE client_key=? AND expires_at>?',[key,now]);
-  if(limit?.failures>=maximum) throw new SchoolError(429,'Trop de tentatives. Réessaie dans quelques minutes.');
+  await schoolAttemptLimit(db,key,maximum,now);
   return key;
 }
 
@@ -57,23 +96,23 @@ function schoolRecordAttempt(db,key,now,until) {
 
 async function schoolSignIn(request,db,data) {
   const login=schoolNormalizeLogin(data.login);
-  const code=schoolText(data.code,48).replace(/[ -]/g,'').toUpperCase();
-  const generic='Identifiant ou code scolaire incorrect.';
   const now=Date.now();
   const key=await schoolClientLimit(request,db,'school-login',60,now);
   let signedIn=false;
   const token=schoolBase64(crypto.getRandomValues(new Uint8Array(32)));
-  if(schoolValidLogin(login) && code.length===24 && [...code].every(letter=>SCHOOL_CODE_ALPHABET.includes(letter))) {
-    const [tokenDigest,codeDigest]=await Promise.all([schoolDigest(token),schoolDigest(code)]);
+  const access=schoolValidLogin(login)?await schoolFirst(db,`SELECT k.code_digest,k.revision FROM school_student_access k
+    JOIN school_accounts a ON a.id=k.student_id AND a.active=1 WHERE k.login=?`,[login]):null;
+  if(access&&await schoolAccessMatches(data.code,access.code_digest)) {
     const result=await schoolRun(db,`INSERT INTO school_student_sessions(token_digest,student_id,access_revision,account_revision,expires_at)
       SELECT ?,a.id,k.revision,a.revision,? FROM school_student_access k
       JOIN school_accounts a ON a.id=k.student_id AND a.active=1
-      WHERE k.login=? AND k.code_digest=?`,[tokenDigest,now+SCHOOL_LOGIN_LIFE,login,codeDigest]);
+      WHERE k.login=? AND k.revision=? AND k.code_digest=?`,
+      [await schoolDigest(token),now+SCHOOL_LOGIN_LIFE,login,access.revision,access.code_digest]);
     signedIn=schoolChanged(result);
   }
   if(!signedIn) {
     await schoolRecordAttempt(db,key,now,now+10*SCHOOL_MINUTE);
-    throw new SchoolError(401,generic,'credentials');
+    throw new SchoolError(401,'Identifiant ou mot de passe incorrect.','credentials');
   }
   try {
     await db.batch([
@@ -84,6 +123,54 @@ async function schoolSignIn(request,db,data) {
     ]);
   } catch { console.warn('School session cleanup failed'); }
   return json({signedIn:true},200,{'Set-Cookie':schoolSessionCookie(token,SCHOOL_LOGIN_LIFE/1000)});
+}
+
+async function schoolChangePassword(request,db,account,data) {
+  schoolRoles(account,...SCHOOL_MEMBER_ROLES);
+  if(account.auth!=='school') throw new SchoolError(403,'Cette action est disponible avec un accès scolaire.');
+  const password=schoolPasswordValue(data.newPassword);
+  schoolRequire([...password].length>=15&&password.trim(),'Choisis un mot de passe de 15 à 128 caractères.');
+  const now=Date.now();
+  const sessionDigest=await schoolDigest(schoolSessionToken(request));
+  const credentials=await schoolFirst(db,`SELECT k.code_digest,k.revision,s.account_revision
+    FROM school_student_sessions s
+    JOIN school_student_access k ON k.student_id=s.student_id AND k.revision=s.access_revision
+    JOIN school_accounts a ON a.id=s.student_id AND a.revision=s.account_revision AND a.active=1
+    WHERE s.student_id=? AND s.token_digest=? AND s.expires_at>?`,[account.id,sessionDigest,now]);
+  const changed='La session ou le mot de passe a changé. Reconnecte-toi.';
+  if(!credentials) throw new SchoolError(409,changed);
+  const key=await schoolDigest('school-password:'+account.id+':'+credentials.revision);
+  await schoolAttemptLimit(db,key,8,now);
+  if(!await schoolAccessMatches(data.currentPassword,credentials.code_digest)) {
+    await schoolRecordAttempt(db,key,now,now+10*SCHOOL_MINUTE);
+    throw new SchoolError(400,'Le mot de passe actuel est incorrect.','current-password');
+  }
+  const unchanged=credentials.code_digest.startsWith('pbkdf2-sha256$')?
+    schoolPasswordValue(data.currentPassword)===password:schoolLoginCode(data.currentPassword)===schoolLoginCode(password);
+  schoolRequire(!unchanged,'Choisis un mot de passe différent du mot de passe actuel.');
+
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const token=schoolBase64(crypto.getRandomValues(new Uint8Array(32)));
+  const [digest,tokenDigest]=await Promise.all([schoolPasswordDigest(password,salt),schoolDigest(token)]);
+  const verifier='pbkdf2-sha256$'+SCHOOL_PASSWORD_ITERATIONS+'$'+schoolBase64(salt)+'$'+digest;
+  const updatedAt=Date.now();
+  // The access revision invalidates older sessions. Rotate the current session in the same transaction.
+  const results=await db.batch([
+    schoolQuery(db,`UPDATE school_student_access SET code_digest=?,revision=revision+1
+      WHERE student_id=? AND revision=? AND code_digest=? AND EXISTS (
+        SELECT 1 FROM school_student_sessions s JOIN school_accounts a ON a.id=s.student_id
+        WHERE s.student_id=? AND s.token_digest=? AND s.access_revision=? AND s.expires_at>?
+          AND a.revision=s.account_revision AND a.revision=? AND a.active=1)`,
+    [verifier,account.id,credentials.revision,credentials.code_digest,
+      account.id,sessionDigest,credentials.revision,updatedAt,credentials.account_revision]),
+    schoolQuery(db,`INSERT INTO school_student_sessions(token_digest,student_id,access_revision,account_revision,expires_at)
+      SELECT ?,a.id,k.revision,a.revision,? FROM school_student_access k
+      JOIN school_accounts a ON a.id=k.student_id AND a.active=1 AND a.revision=?
+      WHERE k.student_id=? AND k.revision=? AND k.code_digest=?`,
+    [tokenDigest,updatedAt+SCHOOL_LOGIN_LIFE,credentials.account_revision,account.id,credentials.revision+1,verifier])
+  ]);
+  if(!schoolChanged(results[0])) throw new SchoolError(409,changed);
+  return json({saved:true},200,{'Set-Cookie':schoolSessionCookie(token,SCHOOL_LOGIN_LIFE/1000)});
 }
 
 async function schoolSignOut(db,request) {
