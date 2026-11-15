@@ -23,6 +23,14 @@ function schoolSessionView(session) {
   return {...view,file:file_key ? {name:file_name,type:file_type,size:file_size} : null};
 }
 
+async function schoolUpcomingSessions(db,scope,limit) {
+  const [today,time]=schoolMoroccoClock.format(Date.now()).replace(' ','T').split('T');
+  const [hour,minute]=time.split(':').map(Number);
+  const rows=await schoolSessions(db,scope,'s.date>? OR (s.date=? AND s.start_minute+s.duration>?)',
+    [today,today,hour*60+minute],false,limit);
+  return rows.map(schoolSessionView);
+}
+
 function schoolSessionEnded(session) {
   return schoolSessionInstant(session.date,session.start_minute+session.duration)<=Date.now();
 }

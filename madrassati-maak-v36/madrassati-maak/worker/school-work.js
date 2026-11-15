@@ -76,6 +76,17 @@ function schoolHomeworkList(db,account,child) {
   [...Array(3).fill(Number(account.role==='professeur')),student,...scope.args]);
 }
 
+function schoolDueHomework(db,children,until,limit) {
+  return schoolAll(db,`WITH due AS (
+    SELECT e.student_id,s.id,s.title,s.subject,s.due_date,
+      ROW_NUMBER() OVER (PARTITION BY e.student_id ORDER BY s.due_date,s.title,s.id) AS position
+    FROM school_enrolments e JOIN school_sessions s ON s.class_id=e.class_id
+    LEFT JOIN school_submissions p ON p.session_id=s.id AND p.student_id=e.student_id
+    WHERE e.student_id IN (SELECT value FROM json_each(?)) AND s.exercise<>'' AND s.due_date<=? AND p.submitted_at IS NULL
+  ) SELECT student_id,id,title,subject,due_date FROM due WHERE position<=? ORDER BY position,id`,
+  [JSON.stringify(children.map(child=>child.id)),until,limit]);
+}
+
 async function schoolHomeworkSession(db,account,child,id) {
   schoolRoles(account,'professeur','eleve','parent');
   schoolRequire(schoolId(id),'Devoir invalide.');
