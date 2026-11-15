@@ -152,7 +152,7 @@ async function schoolAssessmentRemove(db,account,data) {
   if(!schoolChanged(result)) throw new SchoolError(409,'L’évaluation a changé ou une saisie de notes y est déjà associée.');
 }
 
-async function schoolEvaluationSave(db,account,data) {
+async function schoolEvaluationEntry(db,account,data) {
   schoolRoles(account,'professeur');
   const period=await schoolPeriod(db);
   if (!period || period.id!==data.periodId || schoolPeriodView(period).phase!=='open') {
@@ -162,6 +162,9 @@ async function schoolEvaluationSave(db,account,data) {
   const assessment=data.assessmentId && await schoolFirst(db,
     'SELECT * FROM school_assessments WHERE id=? AND teacher_id=?',[data.assessmentId,account.id]);
   if(data.assessmentId&&!assessment) throw new SchoolError(404,'Cette évaluation n’est pas disponible.');
+  if(data.assessmentRevision!=null&&(assessment?.revision||0)!==data.assessmentRevision) {
+    throw new SchoolError(409,'L’évaluation a changé. Actualise la page.');
+  }
   const teaching=await schoolTeaching(db,account,account.id,assessment?.class_id||data.classId);
   const title=assessment?.title||schoolText(data.title,120);
   const date=assessment?.date||data.date;
@@ -185,7 +188,6 @@ async function schoolEvaluationSave(db,account,data) {
     if (score===null) delete scores[student];
     else scores[student]=score;
   }
-  const id=existing?.id || crypto.randomUUID();
   const stored=JSON.stringify(scores);
   const window=`EXISTS (SELECT 1 FROM school_periods p WHERE p.id=? AND (p.publish_at IS NULL OR p.publish_at>${SCHOOL_CLOCK})
     AND p.closed_at IS NULL AND p.opens_at<=${SCHOOL_CLOCK} AND p.closes_at>${SCHOOL_CLOCK}
@@ -194,29 +196,70 @@ async function schoolEvaluationSave(db,account,data) {
     WHERE t.teacher_id=? AND t.class_id=? AND t.subject=? AND a.active=1)`;
   const assessmentCurrent=assessment ? 'AND EXISTS (SELECT 1 FROM school_assessments s WHERE s.id=? AND s.revision=?)' : '';
   const scope=[period.id,account.id,teaching.class_id,teaching.subject,...(assessment?[assessment.id,assessment.revision]:[])];
+  return {period,assessment,teaching,existing,title,date,stored,window,authorized,assessmentCurrent,scope};
+}
+
+async function schoolEvaluationDraftSave(db,account,data) {
+  const {period,assessment,existing,stored,window,authorized,assessmentCurrent,scope}=await schoolEvaluationEntry(db,account,data);
+  const key=assessment?.id||existing?.id;
+  schoolRequire(key&&Number.isSafeInteger(data.draftRevision)&&data.draftRevision>=0,'Brouillon invalide.');
+  const current=existing?'EXISTS (SELECT 1 FROM school_evaluations WHERE id=? AND revision=?)':
+    'NOT EXISTS (SELECT 1 FROM school_evaluations WHERE assessment_id=?)';
+  const result=await schoolFirst(db,`INSERT INTO school_grade_drafts(teacher_id,period_id,item_id,base_revision,assessment_revision,scores)
+    SELECT ?,?,?,?,?,? WHERE ${window} AND ${authorized} ${assessmentCurrent} AND ${current}
+    ON CONFLICT(teacher_id,period_id,item_id) DO UPDATE SET
+      scores=excluded.scores,base_revision=excluded.base_revision,assessment_revision=excluded.assessment_revision,revision=revision+1
+    WHERE school_grade_drafts.revision=? OR (?=0 AND (school_grade_drafts.base_revision<>excluded.base_revision
+      OR school_grade_drafts.assessment_revision<>excluded.assessment_revision))
+    RETURNING revision`,[account.id,period.id,key,existing?.revision||0,assessment?.revision||0,stored,...scope,
+    ...(existing?[existing.id,existing.revision]:[assessment.id]),data.draftRevision,data.draftRevision]);
+  if(!result) throw new SchoolError(409,'Le brouillon ou la période a changé. Actualise la page.');
+  return {...result,scores:JSON.parse(stored)};
+}
+
+async function schoolEvaluationSave(db,account,data) {
+  const {period,assessment,teaching,existing,title,date,stored,window,authorized,assessmentCurrent,scope}=await schoolEvaluationEntry(db,account,data);
+  const id=existing?.id||crypto.randomUUID();
+  let draftCurrent='';
+  if(data.draftRevision!=null) {
+    schoolRequire(Number.isSafeInteger(data.draftRevision)&&data.draftRevision>=0,'Brouillon invalide.');
+    draftCurrent=`AND COALESCE((SELECT revision FROM school_grade_drafts WHERE teacher_id=? AND period_id=? AND item_id=?
+      AND base_revision=? AND assessment_revision=?),0)=?`;
+    scope.push(account.id,period.id,assessment?.id||id,existing?.revision||0,assessment?.revision||0,data.draftRevision);
+  }
   const result=existing ?
     await schoolRun(db,`UPDATE school_evaluations SET title=?,date=?,scores=?,revision=revision+1
-      WHERE id=? AND revision=? AND ${window} AND ${authorized} ${assessmentCurrent}`,[title,date,stored,id,existing.revision,...scope]) :
+      WHERE id=? AND revision=? AND ${window} AND ${authorized} ${assessmentCurrent} ${draftCurrent}`,[title,date,stored,id,existing.revision,...scope]) :
     await schoolRun(db,`INSERT OR IGNORE INTO school_evaluations(id,period_id,class_id,teacher_id,subject,title,date,scores,assessment_id)
-      SELECT ?,?,?,?,?,?,?,?,? WHERE ${window} AND ${authorized} ${assessmentCurrent}`,[id,period.id,teaching.class_id,account.id,
+      SELECT ?,?,?,?,?,?,?,?,? WHERE ${window} AND ${authorized} ${assessmentCurrent} ${draftCurrent}`,[id,period.id,teaching.class_id,account.id,
       teaching.subject,title,date,stored,assessment?.id??null,...scope]);
   if (!schoolChanged(result)) throw new SchoolError(409,'La période ou l’évaluation a changé. Actualise la page.');
   return id;
 }
 
 async function schoolTeacherEvaluations(db,account,period) {
+  const open=schoolPeriodView(period)?.phase==='open';
+  const drafts=open?await schoolAll(db,`SELECT item_id,revision,base_revision,assessment_revision,scores FROM school_grade_drafts
+    WHERE period_id=? AND teacher_id=?`,[period.id,account.id]):[];
+  const byItem=new Map(drafts.map(row=>[row.item_id,row]));
   const rows=await schoolAll(db,`SELECT e.id,e.assessment_id,e.period_id,e.class_id,e.subject,e.title,e.date,e.scores,e.revision,
-    p.publish_at,c.name AS class_name FROM school_evaluations e
+    p.publish_at,c.name AS class_name,s.revision AS assessment_revision FROM school_evaluations e
     JOIN school_periods p ON p.id=e.period_id JOIN school_classes c ON c.id=e.class_id
     JOIN school_teaching t ON t.teacher_id=e.teacher_id AND t.class_id=e.class_id
+    LEFT JOIN school_assessments s ON s.id=e.assessment_id
     WHERE e.teacher_id=?
     UNION ALL
-    SELECT NULL,s.id,NULL,s.class_id,s.subject,s.title,s.date,'{}',NULL,NULL,c.name FROM school_assessments s
+    SELECT NULL,s.id,NULL,s.class_id,s.subject,s.title,s.date,'{}',NULL,NULL,c.name,s.revision FROM school_assessments s
     JOIN school_classes c ON c.id=s.class_id JOIN school_teaching t ON t.teacher_id=s.teacher_id AND t.class_id=s.class_id
     WHERE s.teacher_id=? AND NOT EXISTS (SELECT 1 FROM school_evaluations e WHERE e.assessment_id=s.id)
     ORDER BY date DESC,title LIMIT 250`,[account.id,account.id]);
-  const open=schoolPeriodView(period)?.phase==='open';
-  return rows.map(row=>({...row,scores:JSON.parse(row.scores),editable:open && (!row.period_id||row.period_id===period.id)}));
+  return rows.map(row=>{
+    const editable=open&&(!row.period_id||row.period_id===period.id);
+    const draft=editable&&byItem.get(row.assessment_id||row.id);
+    return {...row,scores:JSON.parse(row.scores),editable,
+      draft:draft&&draft.base_revision===(row.revision||0)&&draft.assessment_revision===(row.assessment_revision||0)?
+        {revision:draft.revision,scores:JSON.parse(draft.scores)}:null};
+  });
 }
 
 function schoolPublishedGrades(db,studentId,week,inWeek) {

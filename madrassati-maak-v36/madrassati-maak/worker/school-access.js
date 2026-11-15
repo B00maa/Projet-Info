@@ -71,7 +71,7 @@ function schoolSessionToken(request) {
 
 async function schoolSessionAccount(db,token) {
   if(!token) return null;
-  return schoolFirst(db,`SELECT a.id,a.name,a.role,a.active FROM school_student_sessions s
+  return schoolFirst(db,`SELECT a.id,a.name,a.role,k.onboarding_required FROM school_student_sessions s
     JOIN school_student_access k ON k.student_id=s.student_id AND k.revision=s.access_revision
     JOIN school_accounts a ON a.id=s.student_id AND a.revision=s.account_revision AND a.active=1
     WHERE s.token_digest=? AND s.expires_at>?`,[await schoolDigest(token),Date.now()]);
@@ -100,15 +100,22 @@ async function schoolSignIn(request,db,data) {
   const key=await schoolClientLimit(request,db,'school-login',60,now);
   let signedIn=false;
   const token=schoolBase64(crypto.getRandomValues(new Uint8Array(32)));
-  const access=schoolValidLogin(login)?await schoolFirst(db,`SELECT k.code_digest,k.revision FROM school_student_access k
+  const access=schoolValidLogin(login)?await schoolFirst(db,`SELECT k.student_id,k.code_digest,k.revision,k.onboarding_required FROM school_student_access k
     JOIN school_accounts a ON a.id=k.student_id AND a.active=1 WHERE k.login=?`,[login]):null;
   if(access&&await schoolAccessMatches(data.code,access.code_digest)) {
-    const result=await schoolRun(db,`INSERT INTO school_student_sessions(token_digest,student_id,access_revision,account_revision,expires_at)
+    const tokenDigest=await schoolDigest(token);
+    const insert=schoolQuery(db,`INSERT INTO school_student_sessions(token_digest,student_id,access_revision,account_revision,expires_at)
       SELECT ?,a.id,k.revision,a.revision,? FROM school_student_access k
       JOIN school_accounts a ON a.id=k.student_id AND a.active=1
       WHERE k.login=? AND k.revision=? AND k.code_digest=?`,
-      [await schoolDigest(token),now+SCHOOL_LOGIN_LIFE,login,access.revision,access.code_digest]);
-    signedIn=schoolChanged(result);
+      [tokenDigest,now+SCHOOL_LOGIN_LIFE,login,access.revision,access.code_digest]);
+    if(access.onboarding_required) {
+      const [result]=await db.batch([insert,schoolQuery(db,`UPDATE school_student_access SET first_login_at=?
+        WHERE student_id=? AND first_login_at IS NULL
+          AND EXISTS (SELECT 1 FROM school_student_sessions WHERE token_digest=?)`,
+      [now,access.student_id,tokenDigest])]);
+      signedIn=schoolChanged(result);
+    } else signedIn=schoolChanged(await insert.run());
   }
   if(!signedIn) {
     await schoolRecordAttempt(db,key,now,now+10*SCHOOL_MINUTE);
@@ -143,7 +150,8 @@ async function schoolChangePassword(request,db,account,data) {
   await schoolAttemptLimit(db,key,8,now);
   if(!await schoolAccessMatches(data.currentPassword,credentials.code_digest)) {
     await schoolRecordAttempt(db,key,now,now+10*SCHOOL_MINUTE);
-    throw new SchoolError(400,'Le mot de passe actuel est incorrect.','current-password');
+    const message=account.passwordSetup?'Le code personnel est incorrect.':'Le mot de passe actuel est incorrect.';
+    throw new SchoolError(400,message,'current-password');
   }
   const unchanged=credentials.code_digest.startsWith('pbkdf2-sha256$')?
     schoolPasswordValue(data.currentPassword)===password:schoolLoginCode(data.currentPassword)===schoolLoginCode(password);
@@ -156,7 +164,7 @@ async function schoolChangePassword(request,db,account,data) {
   const updatedAt=Date.now();
   // The access revision invalidates older sessions. Rotate the current session in the same transaction.
   const results=await db.batch([
-    schoolQuery(db,`UPDATE school_student_access SET code_digest=?,revision=revision+1
+    schoolQuery(db,`UPDATE school_student_access SET code_digest=?,revision=revision+1,onboarding_required=0
       WHERE student_id=? AND revision=? AND code_digest=? AND EXISTS (
         SELECT 1 FROM school_student_sessions s JOIN school_accounts a ON a.id=s.student_id
         WHERE s.student_id=? AND s.token_digest=? AND s.access_revision=? AND s.expires_at>?
@@ -187,10 +195,12 @@ async function schoolResetAccess(db,account,data) {
   if(!member) throw new SchoolError(404,'Ce compte est indisponible.');
   if((member.revision||0)!==data.revision) throw new SchoolError(409,'Le code a déjà changé. Actualise la liste.');
   const access=await schoolNewCredential(member.login||schoolNewLogin(member.id,member.role));
-  const result=await schoolRun(db,`INSERT INTO school_student_access(student_id,login,code_digest)
-    SELECT id,?,? FROM school_accounts WHERE id=? AND active=1 AND role<>'administration'
+  const [result]=await db.batch([schoolQuery(db,`INSERT INTO school_student_access(student_id,login,code_digest,onboarding_required)
+    SELECT id,?,?,1 FROM school_accounts WHERE id=? AND active=1 AND role<>'administration'
     ON CONFLICT(student_id) DO UPDATE SET code_digest=excluded.code_digest,revision=revision+1
-    WHERE school_student_access.revision=?`,[access.login,access.digest,member.id,data.revision]);
+    WHERE school_student_access.revision=?`,[access.login,access.digest,member.id,data.revision]),
+  schoolAccountEvent(db,account.id,member.id,'access-reset',
+    'EXISTS (SELECT 1 FROM school_student_access WHERE student_id=? AND code_digest=?)',[member.id,access.digest])]);
   if(!schoolChanged(result)) throw new SchoolError(409,'Le compte a changé. Actualise la liste.');
   return schoolCredentialView(access);
 }
@@ -319,8 +329,8 @@ async function schoolImportStudents(db,account,data,commit) {
         json_extract(j.value,'$.email'),json_extract(j.value,'$.name'),'eleve' FROM json_each(?) j`,[payload]),
     schoolQuery(db,`INSERT INTO school_enrolments(student_id,class_id)
       SELECT json_extract(value,'$.id'),json_extract(value,'$.classId') FROM json_each(?)`,[payload]),
-    schoolQuery(db,`INSERT INTO school_student_access(student_id,login,code_digest)
-      SELECT json_extract(value,'$.id'),json_extract(value,'$.login'),json_extract(value,'$.digest') FROM json_each(?)`,[payload])
+    schoolQuery(db,`INSERT INTO school_student_access(student_id,login,code_digest,onboarding_required)
+      SELECT json_extract(value,'$.id'),json_extract(value,'$.login'),json_extract(value,'$.digest'),1 FROM json_each(?)`,[payload])
   ];
   try { await db.batch(statements); }
   catch(error) {

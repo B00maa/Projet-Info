@@ -154,6 +154,7 @@ function groqTeacherFormat(input) {
   }};
   if(action==='plan')properties={plan:{type:'array',items:text}};
   if(action==='expand')properties={text};
+  if(action==='section')properties={objective:text,explanation:text,example:text,takeaway:text,exercise:teacherLessonExerciseSchema(input)};
   return {type:'json_schema',json_schema:{name:'document_pedagogique',strict:true,schema:structuredCoachObject(properties)}};
 }
 
@@ -217,6 +218,7 @@ function teacherCoachResponse(answer,input) {
     return lessonWords(addition)>=30&&teacherLessonKey(addition)!==teacherLessonKey(input.explanation)&&
       teacherLessonKey(addition)!==teacherLessonKey(input.example)?{addition}:null;
   }
+  if(input.task==='lesson'&&input.lessonAction==='section')return validatedTeacherSection(data,input);
   const draft=teacherCoachDraft(data,input);
   return draft?{draft}:null;
 }
@@ -303,7 +305,15 @@ function waitForCoachQuota(delay,signal) {
   });
 }
 
-async function replyToCoach(request,env,account) {
+async function schoolTeacherCoachContext(db,account,input) {
+  if(!input.classId)return input;
+  const teaching=await schoolTeaching(db,account,account.id,input.classId);
+  const entry=await schoolFirst(db,'SELECT name FROM school_classes WHERE id=?',[teaching.class_id]);
+  if(!entry)throw new SchoolError(400,'Cette classe est introuvable.');
+  return {...input,profile:'teacher',subject:teaching.subject,level:entry.name};
+}
+
+async function replyToCoach(request,env,account,providedInput) {
   if (request.headers.get('sec-fetch-site') === 'cross-site') return json({status:'forbidden'},403);
   if (!account) {
     if (!env.DEEPSEEK_API_KEY?.trim()&&!env.GROQ_API_KEY?.trim()) return coachAccessError('needs-key');
@@ -312,18 +322,13 @@ async function replyToCoach(request,env,account) {
   }
   if (request.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') return json({status:'invalid'},415);
 
-  let input = await readCoachBody(request).catch(() => null);
+  let input = providedInput??await readCoachBody(request).catch(() => null);
   if (!input || ![undefined,'student','teacher'].includes(input.profile)) return json({status:'invalid'},400);
   const teacher=account?account.role==='professeur':input.profile==='teacher';
   if(account&&input.profile&&input.profile!==(teacher?'teacher':'student')) return json({status:'forbidden'},403);
   const providers=coachProviders(env,teacher,!!account);
   if(!providers.length)return coachAccessError('needs-key');
-  if(account&&teacher&&input.classId) {
-    const teaching=await schoolTeaching(env.DB,account,account.id,input.classId);
-    const entry=await schoolFirst(env.DB,'SELECT name FROM school_classes WHERE id=?',[teaching.class_id]);
-    if(!entry)return json({status:'invalid'},400);
-    input={...input,profile:'teacher',subject:teaching.subject,level:entry.name};
-  }
+  if(account&&teacher)input=await schoolTeacherCoachContext(env.DB,account,input);
   const parameters = teacher ? teacherCoachRequest(input) : studentCoachRequest(input);
   if (!parameters) return json({status:'invalid'},400);
   const retryAfter=account?await schoolCoachRetryAfter(env.DB,account):0;
