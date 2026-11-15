@@ -64,10 +64,9 @@ function coachQuestionSuggestions() {
   ).join('')}</div></div>`;
 }
 
-function coachResponseError(code,retryAfter) {
-  const delay=coachRetryDelay(retryAfter);
-  if(delay&&(code==='school-rate-limit'||code==='rate-limit'))return state.lang==='ar'?
-    'يمكنك إعادة المحاولة بعد '+delay+'.':'Réessaie dans '+delay+'.';
+function coachResponseError(code,retryAt) {
+  const quota=coachQuotaFeedback(code,retryAt);
+  if(quota)return quota;
   if (code === 'school-rate-limit') return 'Patiente quelques minutes avant d’envoyer une nouvelle question.';
   if (code === 'busy' || code === 'rate-limit') return 'Le service en ligne est occupé. Une aide locale est affichée.';
   if (code === 'timeout') return 'Le service en ligne a mis trop de temps à répondre.';
@@ -82,8 +81,8 @@ function aiCoachContent() {
     `<div class="coach-message own"><div class="coach-bubble"><span dir="auto" data-no-i18n="true">${esc(question)}</span></div></div>
     ${answer ? `<div class="coach-message"><div class="coach-bubble"><strong>${source === 'local' ? 'Aide locale' : 'Coach IA'}</strong><span dir="auto" data-no-i18n="true">${esc(answer)}</span></div></div>` : ''}`
   ).join('');
-  const {failure,retryAfter}=aiCoach.turns.at(-1)||{};
-  const feedback = aiCoach.pending ? 'Le coach prépare une réponse…' : failure ? coachResponseError(failure,retryAfter) : '';
+  const {failure,retryAt}=aiCoach.turns.at(-1)||{};
+  const feedback = aiCoach.pending ? 'Le coach prépare une réponse…' : failure ? coachResponseError(failure,retryAt) : '';
   const retry = failure && aiCoach.access === 'ready' && !aiCoach.pending ?
     '<button type="button" class="text-link" data-action="coach-retry-answer">Réessayer en ligne</button>' : '';
   return `<div id="studentCoachAvailability">${studentCoachAvailability(aiCoach.access)}</div>
@@ -174,7 +173,7 @@ async function sendAIQuestion(question,retry = false) {
   if (retry ? !last?.failure || session.access !== 'ready' : !content) return;
   const turn = retry ? last : {question:content,answer:'',source:'',failure:''};
   turn.failure='';
-  turn.retryAfter=0;
+  turn.retryAt=undefined;
   if (!retry) {
     session.turns = [...session.turns.slice(-19),turn];
     session.draft = '';
@@ -200,7 +199,7 @@ async function sendAIQuestion(question,retry = false) {
       }
       const status=data.status||data.code;
       if (AI_COACH_ACCOUNT_STATES.includes(status)) session.access = status;
-      else Object.assign(turn,{failure:status||'unavailable',retryAfter:data.retryAfter});
+      else Object.assign(turn,{failure:status||'unavailable',retryAt:coachRetryDeadline(data.retryAfter)});
     }
     Object.assign(turn,{answer:coachLocalAnswer(turn.question),source:'local'});
   } catch {

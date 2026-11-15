@@ -210,10 +210,9 @@ function teacherCoachAccessContent() {
     '<p class="tiny muted teacher-coach-local-note">La préparation locale reste disponible.</p>';
 }
 
-function teacherCoachFailure(status,retryAfter) {
-  const delay=coachRetryDelay(retryAfter);
-  if(delay&&(status==='rate-limit'||status==='school-rate-limit'))return state.lang==='ar'?
-    'يمكنك إعادة المحاولة بعد '+delay+'.':'Réessayez dans '+delay+'.';
+function teacherCoachFailure(status,retryAt) {
+  const quota=coachQuotaFeedback(status,retryAt,true);
+  if(quota)return quota;
   return ({
     'network-error':'Le site ne parvient pas à joindre le service IA.',
     timeout:'Le service IA a mis trop de temps à répondre.',
@@ -303,7 +302,7 @@ function teacherCoachWorkspace(subject,classes) {
         </div>
         <p class="coach-ai-note" ${session.access === 'ready' ? '' : 'hidden'}>Le sujet et les consignes sont transmis au service IA. Évitez les données personnelles.</p>
         <div class="teacher-coach-feedback" role="status">${busy ? '<p>'+progress+'</p>' :
-          (session.failure ? `<p>${esc(teacherCoachFailure(session.failure,session.retryAfter))}</p>` : '') + (session.feedback ? `<p>${session.feedback}</p>` : '')}</div>
+          (session.failure ? `<p>${esc(teacherCoachFailure(session.failure,session.retryAt))}</p>` : '') + (session.feedback ? `<p>${session.feedback}</p>` : '')}</div>
         ${draft&&!busy?`<div class="teacher-coach-jump"><button type="button" class="btn secondary small"
           data-action="teacher-coach-view">Afficher le document</button></div>`:''}
       </form>
@@ -463,7 +462,7 @@ async function requestTeacherCoach(context,request,parameters={}) {
       ...(context.classId?{classId:context.classId}:{subject:context.subjectName,level:context.levelName})
     },request.signal,'/api/school/coach');
     return ok&&(data.draft||data.plan||data.addition)?data:{
-      status:data.status||data.code||(data.message?'school-class':'invalid-response'),retryAfter:data.retryAfter
+      status:data.status||data.code||(data.message?'school-class':'invalid-response'),retryAt:coachRetryDeadline(data.retryAfter)
     };
   } catch {
     return {status:timedOut ? 'timeout' : request.signal.aborted ? 'cancelled' : 'network-error'};
@@ -493,7 +492,7 @@ async function generateTeacherDraft(values) {
     const draft = result.draft ? {...context,...result.draft,lessonLevelLabel:label,source:'ai'} : teacherLocalDraft(context);
     if(draft)session.drafts[context.task] = draft;
     session.failure = result.status && !AI_COACH_ACCOUNT_STATES.includes(result.status) ? result.status : '';
-    session.retryAfter = result.retryAfter;
+    session.retryAt = result.retryAt;
     session.feedback = draft?.lessonPlan&&draft.lessonSections?'Le plan a été suivi dans le cours et le PDF.' :
       draft?.source === 'local' ? (context.lessonMode==='chapter'&&draft.lessonMode==='session'?
       'La version locale de ce sujet couvre une séance ciblée. Le chapitre complet est disponible avec le coach en ligne.':'Brouillon local prêt à relire.') :

@@ -55,7 +55,7 @@ async function runTeacherLessonTool(context,parameters,localResult,apply,focus) 
     if(session!==teacherCoach||request.signal.aborted&&result.status!=='timeout')return;
     if(AI_COACH_ACCOUNT_STATES.includes(result.status))session.access=result.status;
     session.failure=result.status&&!AI_COACH_ACCOUNT_STATES.includes(result.status)?result.status:'';
-    session.retryAfter=result.retryAfter;
+    session.retryAt=result.retryAt;
     if(result.plan||result.addition)apply(result);
     else if(!session.failure)session.feedback='Cet outil utilise le coach en ligne.';
   } finally {

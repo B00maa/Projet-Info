@@ -31,10 +31,22 @@ async function requestAICoach(payload,signal,route='/api/coach') {
   return {ok:response.ok,data:data || {status:'invalid-response'}};
 }
 
-function coachRetryDelay(seconds) {
-  if(!Number.isInteger(seconds)||seconds<=0)return '';
-  const [unit,divisor]=seconds>=3600?['hour',3600]:seconds>=60?['minute',60]:['second',1];
-  return new Intl.NumberFormat(state.lang==='ar'?'ar':'fr',{style:'unit',unit}).format(Math.ceil(seconds/divisor));
+function coachRetryDeadline(seconds) {
+  return Number.isInteger(seconds)&&seconds>=0?Date.now()+Math.min(seconds,86400)*1000:undefined;
+}
+
+function coachQuotaFeedback(status,retryAt,teacher=false) {
+  if(!Number.isFinite(retryAt)||!['rate-limit','school-rate-limit'].includes(status))return '';
+  const now=new Date();
+  const arabic=state.lang==='ar';
+  if(retryAt<=now.getTime())return arabic?'يمكنك إعادة المحاولة الآن.':
+    teacher?'Vous pouvez réessayer maintenant.':'Tu peux réessayer maintenant.';
+  const ready=new Date(retryAt);
+  const date=ready.toDateString()===now.toDateString()?{}:{day:'numeric',month:'short'};
+  const time=new Intl.DateTimeFormat(arabic?'ar':'fr',{
+    ...date,hour:'2-digit',minute:'2-digit',second:'2-digit'
+  }).format(ready);
+  return (arabic?'يمكنك إعادة المحاولة ابتداءً من ':teacher?'Réessayez à partir de ':'Réessaie à partir de ')+time+'.';
 }
 
 function coachSchoolLink() {
