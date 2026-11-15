@@ -4,7 +4,15 @@ const TEACHER_LESSON_LABELS={
   'Niveau pédagogique':'المستوى البيداغوجي','Niveau de la classe':'مستوى القسم',
   'CPGE':'الأقسام التحضيرية','Licence 1 (L1)':'السنة الأولى من الإجازة',
   'Plan du cours':'خطة الدرس','Proposer un plan':'اقتراح خطة',
-  'Valider le plan':'اعتماد الخطة','Valider et remplacer le plan':'اعتماد الخطة واستبدال السابقة',
+  'Valider le plan':'اعتماد الخطة',
+  'Cours en préparation':'الدروس قيد الإعداد','Choisir un cours':'اختر درسًا','Nouveau cours':'درس جديد',
+  'Renommer le cours':'إعادة تسمية الدرس','Dupliquer le cours':'نسخ الدرس','Nom du cours':'اسم الدرس',
+  'Le cours a été renommé.':'تمت إعادة تسمية الدرس.','Le cours a été dupliqué.':'تم إنشاء نسخة من الدرس.',
+  'Modifier le chapitre':'تعديل المحور','Régénérer le chapitre':'إعادة إنشاء المحور',
+  'Nom du chapitre':'عنوان المحور','Objectif':'الهدف','Explication':'الشرح','À retenir':'خلاصة',
+  'Énoncé de l’exercice':'نص التمرين','Corrigé de l’exercice':'تصحيح التمرين','Enregistrer le chapitre':'حفظ المحور',
+  'Le chapitre a été mis à jour.':'تم تحديث المحور.','Ce cours est introuvable.':'هذا الدرس غير موجود.',
+  'Vérifie les champs du chapitre et le titre dans le plan.':'تحقّق من حقول المحور ومن عنوانه في الخطة.',
   'Cours par chapitres':'إعداد الدرس حسب المحاور','Chapitres rédigés':'المحاور المكتوبة',
   'Rédigé':'مكتمل',
   'Générer le chapitre suivant':'إنشاء المحور التالي','Relire les chapitres':'مراجعة المحاور',
@@ -13,6 +21,7 @@ const TEACHER_LESSON_LABELS={
   'Le plan est validé. Vous pouvez générer le premier chapitre.':'تم اعتماد الخطة. يمكنكم إنشاء المحور الأول.',
   'Le chapitre est enregistré.':'تم حفظ المحور.','Tous les chapitres du plan sont rédigés.':'اكتملت كتابة جميع محاور الخطة.',
   'Le coach rédige le chapitre suivant…':'يكتب المساعد المحور التالي…','Cours en cours de rédaction':'درس قيد الكتابة',
+  'Le coach rédige à nouveau le chapitre…':'يعيد المساعد كتابة المحور…',
   'Le brouillon du cours a été actualisé.':'تم تحديث مسودة الدرس.',
   'Vérifie le sujet, la matière, le niveau et le plan du cours.':'تحقّق من الموضوع والمادة والمستوى وخطة الدرس.',
   'La classe ou la matière du plan a changé. Valide un nouveau plan.':'تغيّر قسم الخطة أو مادتها. اعتمد خطة جديدة.',
@@ -48,22 +57,31 @@ function teacherLessonPlanControls(settings) {
     '<textarea id="teacherLessonPlanText" name="lessonPlanText" rows="4" maxlength="1452" dir="auto" aria-describedby="teacherLessonPlanHint">'+esc(settings.lessonPlanText||'')+'</textarea>'+
     '<small id="teacherLessonPlanHint" class="muted">Une notion par ligne. Ajoutez, retirez ou réorganisez les notions avant la génération.</small>'+
     '<div class="homework-actions"><button type="button" class="btn secondary small" data-action="teacher-coach-plan">Proposer un plan</button>'+
-    (teacherCoachSchool()?'<button type="button" class="btn secondary small" data-action="teacher-course-start">'+
-      (teacherCoach.course?'Valider et remplacer le plan':'Valider le plan')+'</button>':'')+'</div></section>';
+    (teacherCoachSchool()?'<button type="button" class="btn secondary small" data-action="teacher-course-start">Valider le plan</button>':'')+'</div></section>';
 }
 
 function teacherCoursePanel() {
   const session=teacherCoach;
   const course=session.course;
-  if(!course) return session.courseReadError?
+  const chooser=session.courses.length?`<div class="teacher-lesson-plan"><label for="teacherCourseSelect">Cours en préparation</label>
+    <select id="teacherCourseSelect">${teacherCoachOptions([['','Choisir un cours'],...session.courses.map(item=>[item.id,item.name])],course?.id||'')}</select>
+    <div><button class="btn secondary small" type="button" data-action="teacher-course-new">Nouveau cours</button></div></div>`:'';
+  const warning=session.courseReadError?
     '<p class="teacher-coach-status"><span>Le brouillon du cours est indisponible. Réessayez.</span> <button type="button" class="btn secondary small" data-action="teacher-course-load">Recharger le brouillon</button></p>':'';
+  if(!course)return chooser+warning;
   const {chapters,context}=course;
   const plan=context.lessonPlan;
-  return `<section class="teacher-lesson-plan" id="teacherCourseProgress" aria-labelledby="teacherCourseTitle">
-    <h3 id="teacherCourseTitle">Cours par chapitres</h3><strong data-no-i18n="true" dir="auto">${esc(context.topic)}</strong>
+  return chooser+warning+`<section class="teacher-lesson-plan" id="teacherCourseProgress" aria-labelledby="teacherCourseTitle">
+    <h3 id="teacherCourseTitle">Cours par chapitres</h3><strong data-no-i18n="true" dir="auto">${esc(course.name)}</strong>
+    <div class="homework-actions">
+      <button class="btn secondary small" type="button" data-action="teacher-course-rename">Renommer le cours</button>
+      <button class="btn secondary small" type="button" data-action="teacher-course-duplicate">Dupliquer le cours</button></div>
     <p class="small muted"><span>Chapitres rédigés</span> <bdi dir="ltr">${chapters.length} / ${plan.length}</bdi></p>
-    <ol>${plan.map((heading,i)=>`<li ${i===chapters.length?'aria-current="step"':''}><bdi data-no-i18n="true">${esc(heading)}</bdi>
-      ${i<chapters.length?'<span class="tag mint">Rédigé</span>':''}</li>`).join('')}</ol>
+    <ol class="teacher-course-chapters">${plan.map((heading,i)=>`<li ${i===chapters.length?'aria-current="step"':''}><bdi data-no-i18n="true">${esc(heading)}</bdi>
+      ${i<chapters.length?`<div class="homework-actions"><span class="tag mint">Rédigé</span>
+        <button class="btn secondary small" type="button" data-action="teacher-course-edit-chapter" data-value="${i}">Modifier le chapitre<span class="sr-only"> · ${esc(heading)}</span></button>
+        <button class="btn secondary small" type="button" data-action="teacher-course-regenerate" data-value="${i}">Régénérer le chapitre<span class="sr-only"> · ${esc(heading)}</span></button>
+      </div>`:''}</li>`).join('')}</ol>
     <div class="homework-actions">
       ${chapters.length<plan.length?'<button type="button" class="btn primary small" data-action="teacher-course-next">Générer le chapitre suivant</button>':''}
       ${chapters.length?'<button type="button" class="btn secondary small" data-action="teacher-course-preview">Relire les chapitres</button>':''}
@@ -80,19 +98,38 @@ function teacherCoursePreviewDraft(course) {
     exercises:chapters.map(chapter=>chapter.exercise)
   };
   const lessonLevelLabel=context.lessonLevel&&context.lessonLevel!=='class'?TEACHER_LESSON_LEVELS[context.lessonLevel][context.language]:undefined;
-  return {...context,title:context.topic,summary:lessonData.objectives[0],subjectName:context.subject,levelName:context.level,lessonLevelLabel,
+  return {...context,title:course.name,summary:lessonData.objectives[0],subjectName:context.subject,levelName:context.level,lessonLevelLabel,
     duration:context.minutes||TEACHER_LESSON_MODES[context.lessonMode||'chapter'].duration,source:'ai',fromChapterPlan:true,
     pendingChapters:chapters.length<context.lessonPlan.length,lessonData,...formatTeacherLesson(lessonData,context.language)};
 }
 
-function loadTeacherCourse() {
+function teacherApplyCourse(session,course,{restoreFields=false}={}) {
+  session.course=course;
+  if(course)session.courses=[{id:course.id,name:course.name},...session.courses.filter(item=>item.id!==course.id)];
+  if(course?.chapters.length||session.drafts.lesson?.fromChapterPlan)session.drafts.lesson=teacherCoursePreviewDraft(course);
+  if(!restoreFields||!course)return;
+  const input=course.context;
+  session.classId=teacherCoachClass(input.classId)?input.classId:'';
+  session.subject=input.subject;
+  session.level=input.level;
+  session.language=input.language;
+  session.topic=input.topic;
+  session.notes=input.notes;
+  session.settings.lesson={lessonPlanText:input.lessonPlan.join('\n'),lessonMode:input.lessonMode,lessonLevel:input.lessonLevel,minutes:input.minutes};
+}
+
+function loadTeacherCourse(id='',force=false) {
   const session=teacherCoach;
-  if(!teacherCoachSchool()||session.courseLoaded||session.courseLoad)return session.courseLoad;
-  session.courseLoad=schRequest('/coach/course').then(({course})=>{
-    session.course=course;
+  if(!teacherCoachSchool()||(!id&&!force&&session.courseLoaded)||session.courseLoad)return session.courseLoad;
+  if(id&&!session.courses.some(course=>course.id===id))return;
+  const chooser=document.getElementById('teacherCourseSelect');
+  if(chooser)chooser.disabled=true;
+  const path=id?'/coach/course?id='+encodeURIComponent(id):'/coach/course';
+  session.courseLoad=schRequest(path).then(({course,courses})=>{
+    session.courses=courses;
+    teacherApplyCourse(session,course,{restoreFields:!!id});
     session.courseLoaded=true;
     session.courseReadError=false;
-    if(!session.drafts.lesson||session.drafts.lesson.fromChapterPlan)session.drafts.lesson=teacherCoursePreviewDraft(course);
   }).catch(()=>{
     session.courseReadError=true;
   }).finally(()=>{
@@ -102,7 +139,18 @@ function loadTeacherCourse() {
   return session.courseLoad;
 }
 
-async function changeTeacherCourse(action) {
+function newTeacherCourse() {
+  const session=teacherCoach;
+  teacherApplyCourse(session,null);
+  session.topic='';
+  session.notes='';
+  session.settings.lesson={};
+  session.feedback='';
+  session.failure='';
+  refreshTeacherCoach('#teacherCoachTopic');
+}
+
+async function changeTeacherCourse(action,index) {
   const session=teacherCoach;
   if(!teacherCoachSchool()||session.task!=='lesson'||session.request)return;
   let context;
@@ -114,11 +162,11 @@ async function changeTeacherCourse(action) {
     if(!context.lessonPlan) return schToast('Ajoutez les intitulés des chapitres avant de valider le plan.');
     context={...context,subject:context.subjectName,level:context.levelName};
   }
-  if(action==='next'&&!session.course)return;
+  if(action!=='start'&&!session.course)return;
   const loading=loadTeacherCourse();
   const request=new AbortController();
   session.request=request;
-  session.activity=action==='next'?'section':'course-start';
+  session.activity=action==='next'?'section':action==='regenerate'?'section-again':'course-start';
   session.feedback='';
   session.failure='';
   const timeout=setTimeout(()=>request.abort('timeout'),70000);
@@ -126,19 +174,18 @@ async function changeTeacherCourse(action) {
   try {
     await loading;
     if(session!==teacherCoach||request.signal.aborted)return;
-    const {ok,data}=await requestAICoach({action,revision:session.course?.revision||0,context},request.signal,'/api/school/coach/course');
+    const {ok,data}=await requestAICoach({action,id:session.course?.id,revision:session.course?.revision||0,context,index},request.signal,'/api/school/coach/course');
     if(request.signal.aborted||session!==teacherCoach)return;
     if(ok&&data.course) {
-      session.course=data.course;
+      teacherApplyCourse(session,data.course,{restoreFields:action==='duplicate'});
       session.courseLoaded=true;
       session.courseReadError=false;
-      if(action==='next'||session.drafts.lesson?.fromChapterPlan)session.drafts.lesson=teacherCoursePreviewDraft(data.course);
       const complete=data.course.chapters.length===data.course.context.lessonPlan.length;
       session.feedback=action==='start'?'Le plan est validé. Vous pouvez générer le premier chapitre.':
-        complete?'Tous les chapitres du plan sont rédigés.':'Le chapitre est enregistré.';
+        action==='duplicate'?'Le cours a été dupliqué.':action==='regenerate'?'Le chapitre a été mis à jour.':
+          complete?'Tous les chapitres du plan sont rédigés.':'Le chapitre est enregistré.';
     } else if(data.code==='course-changed') {
-      session.courseLoaded=false;
-      await loadTeacherCourse();
+      await loadTeacherCourse(session.course?.id||'',true);
       session.feedback='Le brouillon du cours a été actualisé.';
     } else {
       if(AI_COACH_ACCOUNT_STATES.includes(data.status))session.access=data.status;
@@ -155,6 +202,42 @@ async function changeTeacherCourse(action) {
     session.activity='';
     if(session===teacherCoach)refreshTeacherCoach('[data-action="teacher-course-next"], [data-action="teacher-course-preview"]');
   }
+}
+
+function teacherCourseForm(index) {
+  const course=teacherCoach.course;
+  if(!course)return;
+  const chapter=course.chapters[index];
+  if(index!=null&&!chapter)return;
+  const field=(label,name,value,max,rows=0)=>`<div><label for="schoolCourseField-${name}">${label}</label>${rows?
+    `<textarea id="schoolCourseField-${name}" name="${name}" rows="${rows}" maxlength="${max}" dir="auto" ${name==='example'?'':'required'}>${esc(value)}</textarea>`:
+    `<input id="schoolCourseField-${name}" name="${name}" value="${esc(value)}" maxlength="${max}" dir="auto" required>`}</div>`;
+  const content=chapter?`
+    ${field('Nom du chapitre','heading',chapter.section.heading,120)}
+    ${field('Objectif','objective',chapter.objective,90)}
+    ${field('Explication','explanation',chapter.section.explanation,720,5)}
+    ${field('Exemple résolu','example',chapter.section.example,250,3)}
+    ${field('À retenir','takeaway',chapter.takeaway,95)}
+    ${field('Énoncé de l’exercice','prompt',chapter.exercise.prompt,150,2)}
+    ${field('Corrigé de l’exercice','solution',chapter.exercise.solution,700,4)}`:
+    field('Nom du cours','name',course.name,120);
+  schShowDialog(chapter?'Modifier le chapitre':'Renommer le cours',`<form class="form" data-school-form="teacher-course"
+    data-id="${course.id}" data-revision="${course.revision}" data-index="${index??''}">
+    ${content}${schError()}<div><button type="submit" class="btn primary">${chapter?'Enregistrer le chapitre':'Enregistrer'}</button></div></form>`);
+}
+
+function submitTeacherCourseForm(form,button) {
+  const fields=Object.fromEntries(new FormData(form));
+  const chapter=form.dataset.index!=='';
+  const session=teacherCoach;
+  const payload={id:form.dataset.id,revision:Number(form.dataset.revision),
+    ...(chapter?{action:'edit-chapter',index:Number(form.dataset.index),fields}:{action:'rename',name:fields.name})};
+  return schMutation(button,'/coach/course',payload,chapter?'Le chapitre a été mis à jour.':'Le cours a été renommé.',{
+    close:true,onSaved({course}){
+      if(session!==teacherCoach)return;
+      teacherApplyCourse(session,course,{restoreFields:chapter});
+      refreshTeacherCoach();
+    }});
 }
 
 function showTeacherCourseDraft() {

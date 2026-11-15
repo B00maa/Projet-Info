@@ -63,13 +63,18 @@ function schCodesWorkbook() {
 }
 
 function schTeacherGradesWorkbook() {
-  const item=schoolUI.editor?.item;
-  if(!item||schoolUI.editor.kind!=='grade')return;
+  const editor=schoolUI.editor;
+  if(editor?.kind!=='grade')return;
+  const {item}=editor;
+  const form=schNode('schoolGradeForm');
   const students=schoolUI.data.directory.students.filter(row=>row.class_id===item.class_id);
   saveSchoolWorkbook([{...schWorkbookLocale(),name:tr('Notes'),title:item.title,
     subtitle:schWorkbookSubtitle(item.class_name,item.subject,schExportDate(item.date)),
-    headers:['Élève','Classe','Note / 20'].map(value=>tr(value)),widths:[34,20,18],
-    rows:students.map(student=>[student.name,item.class_name,item.scores[student.id]??''])
+    headers:SCHOOL_GRADE_COLUMNS.map(value=>tr(value)),widths:[34,20,18,39,45],
+    rows:students.map(student=>{
+      const value=form.elements.namedItem('score:'+student.id)?.value||'';
+      return [student.name,item.class_name,schGradeSpreadsheetNumber(value)??value,student.id,schGradeReference(editor)];
+    })
   }],'Madrassati-Notes.xlsx','27566A');
 }
 
