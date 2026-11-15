@@ -50,10 +50,9 @@ async function schoolClientLimit(request,db,scope,maximum,now) {
   return key;
 }
 
-async function schoolRecordAttempt(db,key,now,until) {
-  const row=await schoolFirst(db,'INSERT INTO school_login_limits(client_key,expires_at,failures) VALUES(?,?,1) ON CONFLICT(client_key) DO UPDATE SET failures=CASE WHEN expires_at<=? THEN 1 ELSE failures+1 END, expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at ELSE expires_at END RETURNING failures',
+function schoolRecordAttempt(db,key,now,until) {
+  return schoolFirst(db,'INSERT INTO school_login_limits(client_key,expires_at,failures) VALUES(?,?,1) ON CONFLICT(client_key) DO UPDATE SET failures=CASE WHEN expires_at<=? THEN 1 ELSE failures+1 END, expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at ELSE expires_at END RETURNING failures,expires_at',
     [key,until,now,now]);
-  return row.failures;
 }
 
 async function schoolSignIn(request,db,data) {
@@ -144,11 +143,12 @@ async function schoolSetup(request,env,data) {
   return json({credential:schoolCredentialView(access)},201);
 }
 
-async function schoolCoachLimit(db,account) {
+async function schoolCoachRetryAfter(db,account) {
   const now=Date.now();
   const key=await schoolDigest('school-coach:'+account.id);
   const maximum=account.role==='professeur'?16:30;
-  return await schoolRecordAttempt(db,key,now,now+5*SCHOOL_MINUTE)<=maximum;
+  const {failures,expires_at}=await schoolRecordAttempt(db,key,now,now+5*SCHOOL_MINUTE);
+  return failures>maximum?Math.ceil((expires_at-now)/1000):0;
 }
 
 const schoolImportKey = value => value.normalize('NFC').toLocaleLowerCase('fr');
