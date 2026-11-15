@@ -1,6 +1,6 @@
 # Madrassati Maâk
 
-Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 36 ainsi que ses ressources et ses migrations SQL.
+Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 37 ainsi que ses ressources et ses migrations SQL.
 
 ## Lancer le projet
 
@@ -28,7 +28,7 @@ La route `/ecole` utilise un environnement Workers avec une base Cloudflare D1 l
 Les noms des variables d’environnement sont indiqués dans `.env.example`. Configurez les valeurs dans les secrets de l’hébergeur. Sur ChatGPT Sites, elles se trouvent dans **Paramètres → Secrets**.
 
 - `SCHOOL_SETUP_CODE` permet d’activer le premier compte administrateur. Choisissez un code aléatoire de 24 à 256 caractères. Depuis la connexion scolaire, ouvrez **Activer l’administration** et conservez les accès générés.
-- `GROQ_API_KEY` active les coachs en ligne. Le coach professeur utilise GPT‑OSS 120B en priorité et le coach élève GPT‑OSS 20B. Chaque coach peut utiliser l’autre modèle en cas d’échec. `DEEPSEEK_API_KEY` permet de configurer un fournisseur supplémentaire.
+- `GROQ_API_KEY` active les coachs en ligne. Le coach professeur utilise GPT‑OSS 120B en priorité et le coach élève GPT‑OSS 20B. Lorsque le premier modèle atteint son quota, le coach peut essayer l’autre modèle GPT‑OSS, puis Qwen 3.8 27B. Après les tentatives de secours, une nouvelle tentative peut partir automatiquement si le prochain créneau annoncé est à trois secondes ou moins. `DEEPSEEK_API_KEY` permet de configurer un fournisseur supplémentaire.
 
 L’administration crée les classes et les comptes scolaires depuis **Comptes et classes**. Les utilisateurs se connectent avec l’identifiant et le code remis par l’établissement. Les professeurs peuvent générer des documents depuis une classe attribuée ou en **Préparation libre**.
 
