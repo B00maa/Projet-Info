@@ -28,6 +28,12 @@ function schAccountStatus(member) {
   return member.login?'Actif':'Accès scolaire à créer';
 }
 
+function schFirstLogin(member) {
+  if(member.onboarding_required&&!member.first_login_at)return 'En attente de première connexion';
+  if(member.onboarding_required)return 'Mot de passe à définir';
+  return member.first_login_at?schValue(schTimestamp(member.first_login_at)):'—';
+}
+
 function schAccountActions(member) {
   const {id,role,active,login,archived_at:archived}=member;
   if(archived!=null)return `<button type="button" class="btn secondary small" data-school-action="account-archive" data-id="${id}">Restaurer</button>`;
@@ -71,7 +77,8 @@ function schAccountRows() {
         ${login?`<small><bdi dir="ltr" data-no-i18n="true">${schEsc(login)}</bdi></small>`:''}</div></div>
       <div class="admin-directory-meta"><span class="tag blue">${SCHOOL_ROLE_NAMES[account.role]}</span>
         <span>${membership?schValue(membership):'Sans affectation'}</span></div>
-      <span class="tag ${account.active?'mint':'orange'}">${schAccountStatus(account)}</span>
+      <div class="school-account-status"><span class="tag ${account.active?'mint':'orange'}">${schAccountStatus(account)}</span>
+        ${account.login?`<small class="school-muted"><span>Première connexion</span><br>${schFirstLogin(account)}</small>`:''}</div>
       <div class="admin-row-actions">${schAccountActions(account)}</div>
     </li>`;
   }).join('')}</ul>`;
@@ -406,14 +413,19 @@ function schNotesPage() {
   const list=data.evaluations||[];
   return `<div class="school-title"><h1>Saisie des notes</h1><a class="btn secondary" href="#evaluations">Voir les évaluations</a></div>
     <section class="card school-period" role="status">${schPeriodStatus(period)}</section>
-    <section class="card"><h2>Évaluations</h2>${list.length?list.map(item=>`<article class="school-session">
+    <section class="card"><h2>Évaluations</h2>${list.length?list.map(item=>{
+      const scores=item.draft?.scores||item.scores;
+      const missing=item.editable?data.directory.students.filter(student=>student.class_id===item.class_id&&!Object.hasOwn(scores,student.id)).length:0;
+      return `<article class="school-session">
       <div class="school-session-top"><div><h3>${schValue(item.title)}</h3><div class="school-meta">${schValue(item.class_name)}
         · ${schValue(item.subject)} · ${schValue(schDate(item.date))}</div></div><div class="school-actions">
         <span class="tag ${item.publish_at!==null&&item.publish_at<=schNow()?'mint':'orange'}">${item.publish_at!==null&&item.publish_at<=schNow()?
-          'Notes publiées':item.id?'Brouillon':'À noter'}</span>
+          'Notes publiées':item.draft?'Brouillon automatique':item.id?'Notes enregistrées':'À noter'}</span>
+        ${missing?`<span class="tag orange">${schCountLabel(missing,'note manquante','notes manquantes')}</span>`:''}
         <button class="btn secondary small" type="button" data-school-action="edit-grade" data-id="${item.id||item.assessment_id}"
           ${!item.id&&!item.editable?'disabled':''}>
-          ${item.editable&&period?.phase==='open'?'Saisir les notes':item.id?'Voir les notes':'Saisie fermée'}</button></div></div></article>`).join(''):
+          ${item.editable&&period?.phase==='open'?'Saisir les notes':item.id?'Voir les notes':'Saisie fermée'}</button></div></div></article>`;
+    }).join(''):
         schEmpty('Ajoute une évaluation pour préparer la saisie.')}</section>`;
 }
 
@@ -472,14 +484,92 @@ function schGradeEditor(item) {
   if(!item)return;
   const current=schoolUI.data.directory.classes.find(c=>c.id===item.class_id);
   if(!current)return;
-  schoolUI.editor={kind:'grade',item,periodId:item.period_id||period?.id};
+  schoolUI.editor={kind:'grade',item,periodId:item.period_id||period?.id,draftRevision:item.draft?.revision||0,
+    accountId:schoolUI.data.account.id};
   schShowDialog('Notes de l’évaluation',`<form class="form" id="schoolGradeForm" data-school-form="grade">
     <div><h3>${schValue(item.title)}</h3><p class="school-small school-muted">${schValue(current.name+' · '+current.subject+' · '+schDate(item.date))}</p></div>
     <p id="schoolGradeHint" role="status" class="school-muted school-small">L’administration publie les notes après la saisie.</p>
+    ${item.editable?`<p id="schoolGradeDraftStatus" role="status" class="school-muted school-small">${item.draft?'Brouillon récupéré.':'Le brouillon s’enregistre automatiquement pendant la saisie.'}</p>`:''}
     <fieldset class="school-scores school-stack" id="schoolGradeFields"><legend class="sr-only">Notes de l’évaluation</legend>
-      <div>${schGradeRows(current.id,item.scores)}</div></fieldset>
+      <div>${schGradeRows(current.id,item.draft?.scores||item.scores)}</div></fieldset>
     ${schError()}<div class="school-actions"><button class="btn primary" type="submit">Enregistrer les notes</button>
       <button class="btn secondary" type="button" data-school-action="grade-workbook">Exporter le tableau Excel</button></div></form>`);
+  schSyncEditor();
+}
+
+function schGradeValues(values) {
+  return Object.fromEntries([...values].filter(([key])=>key.startsWith('score:')).map(([key,score])=>
+    [key.slice(6),arabicNumbersToLatin(score)]));
+}
+
+function schGradePayload(editor,scores) {
+  const item=editor.item;
+  return {id:item.id,revision:item.revision,assessmentId:item.assessment_id,assessmentRevision:item.assessment_revision||0,
+    periodId:editor.periodId,classId:item.class_id,title:item.title,date:item.date,draftRevision:editor.draftRevision,scores};
+}
+
+function schGradeStatus(editor,message) {
+  if(schoolUI.editor===editor&&schDialog().open) {
+    const status=schNode('schoolGradeDraftStatus');
+    if(status)status.textContent=tr(message);
+  }
+}
+
+async function schFlushGradeDraft(editor) {
+  clearTimeout(editor.draftTimer);
+  if(editor.draftRequest)await editor.draftRequest;
+  if(!editor.pendingScores||editor.committing)return;
+  const scores=editor.pendingScores;
+  editor.pendingScores=null;
+  const request=schRequest('/evaluation/draft',schGradePayload(editor,scores)).then(draft=>{
+    const {revision}=draft;
+    editor.draftRevision=revision;
+    const data=schoolUI.data;
+    if(data?.account.id===editor.accountId) {
+      const item=data.evaluations?.find(row=>row.id===editor.item.id&&row.assessment_id===editor.item.assessment_id&&
+        row.revision===editor.item.revision&&row.assessment_revision===editor.item.assessment_revision);
+      if(item&&(item.draft?.revision||0)<revision)item.draft=draft;
+    }
+    if(!editor.pendingScores)schGradeStatus(editor,'Brouillon enregistré.');
+  }).catch(error=>{
+    if(schoolUI.editor===editor&&schDialog().open)schGradeStatus(editor,error.message);
+    else if(schoolUI.data?.account.role==='professeur')schToast(error.message);
+  });
+  editor.draftRequest=request;
+  await request;
+  if(editor.draftRequest===request)editor.draftRequest=null;
+}
+
+function schGradeInput(target) {
+  const editor=schoolUI.editor;
+  if(target.form?.id!=='schoolGradeForm'||!target.name.startsWith('score:')||editor?.kind!=='grade'||editor.committing)return false;
+  editor.pendingScores=schGradeValues(new FormData(target.form));
+  clearTimeout(editor.draftTimer);
+  schGradeStatus(editor,'Enregistrement du brouillon…');
+  editor.draftTimer=setTimeout(()=>schFlushGradeDraft(editor),650);
+  return true;
+}
+
+function schCloseGradeEditor(editor) {
+  if(editor?.kind!=='grade'||editor.committing||!editor.pendingScores&&!editor.draftRequest)return;
+  schFlushGradeDraft(editor).then(()=>{
+    if(schoolUI.data?.account.role==='professeur'&&schPage()==='notes')schLoad({quiet:true});
+  });
+}
+
+async function schSaveGradeEditor(button,values) {
+  const editor=schoolUI.editor;
+  if(editor?.kind!=='grade'||editor.committing||schoolUI.busy||schPeriod()?.phase!=='open')return;
+  const scores=schGradeValues(values);
+  editor.committing=true;
+  clearTimeout(editor.draftTimer);
+  editor.pendingScores=null;
+  schSyncEditor();
+  if(editor.draftRequest)await editor.draftRequest;
+  if(schoolUI.editor===editor&&schDialog().open) {
+    await schMutation(button,'/evaluation',schGradePayload(editor,scores),'Les notes ont été enregistrées.',{close:true});
+  }
+  editor.committing=false;
   schSyncEditor();
 }
 
@@ -489,8 +579,8 @@ function schSyncEditor() {
   if(!form || !schDialog().open)return;
   const period=schPeriod();
   const open=period?.phase==='open'&&period.id===schoolUI.editor.periodId;
-  schNode('schoolGradeFields').disabled=!open;
-  form.querySelector('[type=submit]').disabled=!open||schoolUI.busy;
+  schNode('schoolGradeFields').disabled=!open||schoolUI.editor.committing;
+  form.querySelector('[type=submit]').disabled=!open||schoolUI.busy||schoolUI.editor.committing;
   schNode('schoolGradeHint').textContent=tr(open?'L’administration publie les notes après la saisie.':'Lecture seule');
 }
 
@@ -553,15 +643,8 @@ function schStaffSubmit(form,button) {
     case 'assessment-remove':
       return schMutation(button,'/assessment/remove',{id:form.dataset.id,revision:Number(form.dataset.revision)},
         'L’évaluation a été supprimée.',{close:true});
-    case 'grade': {
-      const editor=schoolUI.editor;
-      if(!editor || schPeriod()?.phase!=='open')return schToast('Saisie fermée');
-      const scores=Object.fromEntries([...values.entries()].filter(([key])=>key.startsWith('score:')).map(([key,score])=>
-        [key.slice(6),arabicNumbersToLatin(score)]));
-      const item=editor.item;
-      return schMutation(button,'/evaluation',{id:item.id,revision:item.revision,assessmentId:item.assessment_id,
-        periodId:editor.periodId,classId:item.class_id,title:item.title,date:item.date,scores},'Les notes ont été enregistrées.',{close:true});
-    }
+    case 'grade':
+      return schSaveGradeEditor(button,values);
   }
 }
 

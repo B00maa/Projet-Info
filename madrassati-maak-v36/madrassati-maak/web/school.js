@@ -10,7 +10,7 @@ const SCHOOL_ROLE_NAMES={administration:'Administration',professeur:'Professeur'
 const SCHOOL_NAV={
   administration:[['dashboard','Vue d’ensemble'],['planning','Planning des séances'],['absences','Absences et justificatifs'],
     ['classes','Classes'],['eleves','Élèves inscrits'],['professeurs','Professeurs'],['parents','Parents'],['notes','Périodes et résultats'],
-    ['evaluations','Évaluations'],['comptes','Gestion des comptes'],['bibliotheque','Bibliothèque'],
+    ['evaluations','Évaluations'],['comptes','Gestion des comptes'],['historique','Historique des comptes'],['bibliotheque','Bibliothèque'],
     ['statistiques','Statistiques'],['messages','Messagerie'],['annonces','Annonces'],['parametres','Paramètres']],
   professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes classes'],['eleves','Mes élèves'],
     ['notes','Saisie des notes'],['evaluations','Évaluations'],['planning','Mes séances'],['presences','Suivi des présences'],
@@ -165,6 +165,7 @@ async function schLoad({quiet=false}={}) {
   else if(Object.values(SCHOOL_NAV).some(tabs=>tabs.some(([key])=>key===wanted)))params.set('view',wanted);
   if(schoolUI.week&&params.get('view')!=='dashboard')params.set('week',schoolUI.week);
   if(schoolUI.child)params.set('child',schoolUI.child);
+  if(params.get('view')==='historique')params.set('page',schViewParams().get('page')||'1');
   try {
     const data=await schRequest('/state?'+params);
     if(request!==schoolUI.request)return;
@@ -179,6 +180,11 @@ async function schLoad({quiet=false}={}) {
     schoolUI.data=data;
     schoolUI.error=null;
     schoolUI.clock={now:data.now,at:performance.now()};
+    if(data.account.passwordSetup) {
+      clearTimeout(schoolUI.timer);
+      if(!unchanged||!quiet)schRender();
+      return;
+    }
     schoolUI.week=data.week.start;
     schoolUI.child=data.child?.id||'';
     if(data.view!==schPage())return schLoad({quiet});
@@ -215,9 +221,9 @@ function schShowDialog(title,markup) {
 
 const schCanChangePassword=account=>account.auth==='school'&&['professeur','eleve','parent'].includes(account.role);
 
-function schPasswordDialog() {
-  schShowDialog('Changer le mot de passe',`<form class="form" data-school-form="change-password">
-    <div><label for="schoolCurrentPassword">Mot de passe actuel</label>
+function schPasswordForm(firstLogin=false) {
+  return `<form class="form" data-school-form="change-password">
+    <div><label for="schoolCurrentPassword">${firstLogin?'Code personnel':'Mot de passe actuel'}</label>
       <input id="schoolCurrentPassword" name="currentPassword" type="password" dir="auto"
         autocomplete="current-password" maxlength="256" required></div>
     <div><label for="schoolNewPassword">Nouveau mot de passe</label>
@@ -228,7 +234,11 @@ function schPasswordDialog() {
       <input id="schoolConfirmPassword" name="confirmation" type="password" dir="auto"
         autocomplete="new-password" minlength="15" maxlength="256" required></div>
     ${schError()}<div><button type="submit" class="btn primary">Enregistrer le nouveau mot de passe</button></div>
-  </form>`);
+  </form>`;
+}
+
+function schPasswordDialog() {
+  schShowDialog('Changer le mot de passe',schPasswordForm());
   schNode('schoolCurrentPassword').focus();
 }
 
@@ -241,8 +251,9 @@ function schPasswordSubmit(form,button) {
     schNode('schoolConfirmPassword').focus();
     return;
   }
+  const firstLogin=schoolUI.data.account.passwordSetup;
   return schMutation(button,'/auth/password',{currentPassword,newPassword},
-    'Mot de passe modifié. Les autres sessions ont été fermées.',{close:true});
+    firstLogin?'Ton compte scolaire est activé.':'Mot de passe modifié. Les autres sessions ont été fermées.',{close:true});
 }
 
 function schClearPreview() {
@@ -283,8 +294,8 @@ function schHeaderTools(data,staff=false) {
   return `<div class="school-header-tools">${data?`<div class="school-user">
       ${staff?schStaffAvatar(data.account.name):''}<div><strong>${schValue(data.account.name)}</strong>
         ${!staff||data.account.name!==SCHOOL_ROLE_NAMES[data.account.role]?'<span>'+SCHOOL_ROLE_NAMES[data.account.role]+'</span>':''}</div></div>
-      <button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>
-      ${schCanChangePassword(data.account)?'<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':''}
+      ${data.account.passwordSetup?'':'<button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>'}
+      ${schCanChangePassword(data.account)&&!data.account.passwordSetup?'<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':''}
       ${data.account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
         '<a class="btn secondary small" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top">Se déconnecter</a>'}`:''}
       <button type="button" class="btn secondary small" data-school-action="language" aria-label="${state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe'}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button></div>`;
@@ -296,7 +307,8 @@ function schRender() {
   const data=schoolUI.data;
   const role=data?.account.role;
   const admin=role==='administration';
-  const staff=!!SCHOOL_STAFF_SPACES[role];
+  const passwordSetup=data?.account.passwordSetup;
+  const staff=!!SCHOOL_STAFF_SPACES[role]&&!passwordSetup;
   const page=data?schPage():'';
   const nav=schNode('schoolStaffNavigation');
   const header=schNode('schoolHeader');
@@ -309,12 +321,18 @@ function schRender() {
     '<a class="school-brand" href="/"><img src="/assets/logo.svg" width="42" height="42" alt=""><strong>Madrassati Maâk</strong></a>')+
     schHeaderTools(data,staff));
   if(!data){schNode('schoolApp').innerHTML=localizeHTML(schAuth());return;}
+  if(passwordSetup) {
+    schNode('schoolApp').innerHTML=localizeHTML(`<section class="card school-stack school-password-setup">
+      <h1>Choisis ton mot de passe</h1><p>Saisis le code remis par l’établissement, puis choisis le mot de passe de ton compte scolaire.</p>
+      ${schPasswordForm(true)}</section>`);
+    return;
+  }
   const chooser=data.account.role==='parent'&&data.children.length>1&&!['messages','annonces'].includes(page)?
     `<div class="school-child-picker"><label for="schoolChild">Élève suivi</label>
     <select id="schoolChild">${data.children.map(child=>schOpt(child.id,child.name,data.child?.id)).join('')}</select></div>`:'';
   const content={dashboard:admin?schAdminDashboard:schTeacherDashboard,classes:admin?schAdminClasses:schTeacherClasses,
     eleves:admin?schAccountsPage:schTeacherStudents,professeurs:schAccountsPage,presences:schTeacherAttendance,
-    comptes:schAccountsPage,parents:schAccountsPage,statistiques:schAdminStatistics,parametres:schAdminSettings,
+    comptes:schAccountsPage,parents:schAccountsPage,historique:schAdminHistory,statistiques:schAdminStatistics,parametres:schAdminSettings,
     planning:schPlanningPage,notes:schNotesPage,rattrapage:schCatchupPage,semaine:schParentPage,
     absences:schAbsencesPage,fatigue:schFatiguePage,cours:schCoursesPage,bibliotheque:schLibraryPage,devoirs:schHomeworkPage,
     evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,
@@ -328,7 +346,10 @@ function schRender() {
     if(data.account.role==='eleve') {
       scrollAICoach();
       if(!aiCoach.access)checkAICoachAccess();
-    } else if(!teacherCoach.access)checkTeacherCoachAccess();
+    } else {
+      if(!teacherCoach.access)checkTeacherCoachAccess();
+      loadTeacherCourse();
+    }
   }
 }
 
@@ -463,7 +484,7 @@ function schGradesTable(grades) {
 function schParentPage() {
   const data=schoolUI.data;
   const childSelect=data.children.length===1?`<span class="tag mint">${schValue(data.child.name)}</span>`:'';
-  if(!data.child)return `<div class="school-title"><h1>Résumé de la semaine</h1></div><section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`;
+  if(!data.child)return `<div class="school-title"><h1>Résumé de la semaine</h1></div>${schParentLifeSummary()}<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`;
   const assignments=data.assignments||[];
   const changes=data.changes||[];
   return `<div class="school-title"><h1>Résumé de la semaine</h1>${childSelect}</div>
@@ -539,10 +560,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   schNode('schoolClose').addEventListener('click',()=>schDialog().close());
   schDialog().addEventListener('close',()=>{
     if(schDialog().open)return;
+    schCloseGradeEditor(schoolUI.editor);
     schoolUI.editor=null;schoolUI.credentials=null;schClearPreview();
     if(!schoolUI.dirty&&schoolUI.data)schRender();
   });
   document.addEventListener('input',event=>{
+    if(schGradeInput(event.target))return;
     if(event.target.matches('input[data-school-directory]')&&schDirectoryInput(event.target))return;
     if(event.target.id==='schoolRosterSearch'&&schTeacherSearch(event.target))return;
     if(event.target.id==='coachAIInput'){aiCoach.draft=event.target.value;schoolUI.dirty=!!aiCoach.draft;return;}
@@ -626,6 +649,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   });
   window.addEventListener('hashchange',()=>{
     if(!schoolUI.data)return;
+    if(schoolUI.data.account.passwordSetup)return;
     if(schDialog().open)schDialog().close();
     schoolUI.courseSubject='';
     if(SCHOOL_STAFF_SPACES[schoolUI.data.account.role]) {

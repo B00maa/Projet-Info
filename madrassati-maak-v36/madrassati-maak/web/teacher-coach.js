@@ -132,7 +132,7 @@ const TEACHER_COACH_TEMPLATES = {
 
 function newTeacherCoach() {
   return {teacherId:'',access:'',task:'lesson',classId:null,subject:'',level:'',language:'',topic:'',notes:'',settings:{},drafts:{},request:null,
-    accessRequest:null,failure:'',feedback:'',localTopicsOpen:false,activity:''};
+    accessRequest:null,failure:'',feedback:'',localTopicsOpen:false,activity:'',course:null,courseLoad:null,courseLoaded:false,courseReadError:false};
 }
 
 let teacherCoach = newTeacherCoach();
@@ -269,7 +269,8 @@ function teacherCoachWorkspace(subject,classes) {
   const contexts=classes.map(c=>[c.id,c.name]);
   if(teacherCoachSchool())contexts.push(['','Préparation libre']);
   const fullLesson=session.task==='lesson'&&session.settings.lesson?.lessonMode!=='session';
-  const progress={plan:'Le coach propose un plan…',expand:'Le coach prépare l’approfondissement…'}[session.activity]||
+  const progress={plan:'Le coach propose un plan…',expand:'Le coach prépare l’approfondissement…',
+    section:'Le coach rédige le chapitre suivant…'}[session.activity]||
     (fullLesson?'Le coach rédige les sections du cours et les exercices…':'Le coach prépare le document…');
   return `<div class="teacher-coach-types" role="group" aria-label="Type de document">${Object.entries(TEACHER_COACH_TASKS).map(([task,{label,icon:graphic}]) =>
     `<button type="button" data-action="teacher-coach-task" data-value="${task}" aria-pressed="${session.task === task}" ${busy ? 'disabled' : ''}>${teacherCoachTile(graphic,session.task === task ? 'mint' : '')}<span>${label}</span></button>`
@@ -294,6 +295,7 @@ function teacherCoachWorkspace(subject,classes) {
           <div><label for="teacherCoachNotes">Consignes et précisions</label><textarea id="teacherCoachNotes" name="notes" maxlength="1600" dir="auto" rows="4" placeholder="${session.task==='lesson'?'Indiquez les notions à couvrir ou le niveau voulu, par exemple CPGE.':'Objectifs, niveau de difficulté, durée ou barème…'}">${esc(session.notes)}</textarea></div>
           ${teacherCoachControls(session.task,session.settings[session.task]||{})}
           ${session.task==='lesson'?teacherLessonPlanControls(session.settings.lesson||{}):''}
+          ${session.task==='lesson'&&teacherCoachSchool()?teacherCoursePanel():''}
           <div id="teacherCoachExamples" ${free?'hidden':''}>${teacherLocalTopics(subject)}</div>
         </fieldset>
         <div class="homework-actions">
@@ -325,7 +327,8 @@ function teacherCoachDraftPreview(draft,busy) {
   const actionLabel = teacherCoachSchool()&&draft.task!=='exam'?'Ouvrir dans l’éditeur de séance':
     {lesson:'Ouvrir dans l’éditeur de cours',exercises:'Ouvrir dans l’éditeur de devoir',exam:'Ouvrir dans l’éditeur d’examen'}[draft.task];
   const disabled = busy ? 'disabled' : '';
-  const source = draft.source === 'local' ? 'Brouillon local' : draft.source === 'template' ? 'Modèle à compléter' : 'Brouillon généré';
+  const source = draft.pendingChapters ? 'Cours en cours de rédaction' :
+    draft.source === 'local' ? 'Brouillon local' : draft.source === 'template' ? 'Modèle à compléter' : 'Brouillon généré';
   const notes = draft.source !== 'ai' && draft.notes && searchKey(draft.notes) !== searchKey(draft.topic) ?
     `<details class="teacher-preparation-notes"><summary>Précisions de préparation</summary><p class="teacher-draft-text" dir="auto" data-no-i18n="true">${esc(draft.notes)}</p></details>` : '';
   const scope=draft.task==='lesson'&&draft.source!=='template'&&TEACHER_COACH_LESSON_MODES[draft.lessonMode];
@@ -337,7 +340,7 @@ function teacherCoachDraftPreview(draft,busy) {
     ${review?'<button type="button" class="btn secondary small lesson-review-button" data-action="teacher-coach-checks">Consultez la vérification des calculs.</button>':''}
     <h3>Version élève</h3>
     <div class="homework-actions">
-      ${canPublish?`<button type="button" class="btn primary" data-action="teacher-coach-open" ${disabled}>${teacherCoachGlyph('arrow')} ${actionLabel}</button>`:''}
+      ${canPublish&&!draft.pendingChapters?`<button type="button" class="btn primary" data-action="teacher-coach-open" ${disabled}>${teacherCoachGlyph('arrow')} ${actionLabel}</button>`:''}
       <button type="button" class="btn secondary" data-action="teacher-coach-download" data-value="content" ${disabled}>${teacherCoachGlyph('download')} PDF · Version élève</button>
     </div>
     ${draft.lessonSections?teacherCoachLessonPreview(draft,busy):`<pre class="teacher-draft-text" dir="auto" data-no-i18n="true">${esc(draft.content)}</pre>`}
@@ -515,7 +518,7 @@ function currentTeacherDraft() {
 
 function openTeacherDraft() {
   const draft = currentTeacherDraft();
-  if (!draft) return;
+  if (!draft||draft.pendingChapters) return;
   if(teacherCoachSchool()) {
     if(!teacherCoachClass(draft.classId))return;
     if(draft.task==='exam')return schAssessmentEditor(null,{title:draft.title,class_id:draft.classId,kind:'exam',instruction:draft.content});
@@ -568,6 +571,10 @@ function teacherCoachAction(action,value) {
     case 'teacher-coach-view': viewTeacherCoachOutput(); break;
     case 'teacher-coach-section': viewTeacherLessonSection(value); break;
     case 'teacher-coach-plan': proposeTeacherLessonPlan(); break;
+    case 'teacher-course-start': changeTeacherCourse('start'); break;
+    case 'teacher-course-next': changeTeacherCourse('next'); break;
+    case 'teacher-course-load': loadTeacherCourse(); break;
+    case 'teacher-course-preview': showTeacherCourseDraft(); break;
     case 'teacher-coach-expand': expandTeacherLessonSection(value); break;
     case 'teacher-coach-checks': {
       const correction=document.querySelector('#teacherCoachOutput .teacher-coach-correction');
