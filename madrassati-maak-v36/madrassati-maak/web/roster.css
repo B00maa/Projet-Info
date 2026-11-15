@@ -1,0 +1,21 @@
+.roster-class-card { display: flex; flex-direction: column; gap: 13px; }
+.roster-class-card h2 { margin: 0; }
+.roster-class-count, .roster-results-count { color: #41653d; font-size: 14px; font-weight: 650; }
+.roster-class-card .homework-actions { margin-block-start: auto; }
+.roster-filters > .filter-field { flex: 1 1 180px; max-width: 350px; }
+.roster-results-count { margin-block-end: 12px; }
+.roster-list { padding: 0; margin: 0; list-style: none; }
+.roster-row { display: grid; grid-template-columns: minmax(155px,1fr) minmax(130px,.85fr) auto; align-items: center; gap: 14px; padding-block: 13px; border-block-start: 1px solid #e6ece0; }
+.roster-row .student-name { min-width: 0; overflow-wrap: anywhere; }
+.roster-row-meta, .roster-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.roster-row-meta .tag { white-space: normal; }
+.roster-row-actions .text-link { min-height: 38px; }
+.roster-empty { font-size: 14px; color: #5b6d53; padding-block: 12px; }
+.class-row .count { flex-shrink: 0; text-align: end; }
+.class-row > div { min-width: 0; overflow-wrap: anywhere; }
+@media(max-width:780px) {
+  .roster-row { grid-template-columns: minmax(0,1fr); gap: 8px; }
+  .roster-row-actions .text-link { min-height: 42px; }
+  .roster-filters > .filter-field { flex-basis: 100%; max-width: none; }
+  .roster-filters input, .roster-filters select { font-size: 16px; }
+}

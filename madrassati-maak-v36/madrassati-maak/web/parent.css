@@ -1,0 +1,249 @@
+.parent-home .page-heading {
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.parent-home .page-heading > div,
+.parent-home-grid > *,
+.parent-summary > * {
+  min-inline-size: 0;
+}
+
+.parent-summary {
+  display: grid;
+  grid-template-columns: minmax(190px, .8fr) minmax(0, 1.65fr);
+  gap: 18px;
+  align-items: center;
+  background: #f0f6ed;
+  margin-block-end: 16px;
+}
+
+.parent-child-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.parent-child-summary .avatar {
+  flex-shrink: 0;
+}
+
+.parent-child-summary > div {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.parent-child-summary h2 {
+  color: var(--deep);
+  margin: 0 0 3px;
+  font-size: clamp(17px,2vw,22px);
+  line-height: 1.2;
+}
+
+.parent-child-summary p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.parent-counters,
+.parent-link-grid {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 9px;
+}
+
+.parent-count,
+.parent-link,
+.parent-assignment-row {
+  inline-size: 100%;
+  text-align: start;
+  min-inline-size: 0;
+  color: var(--deep);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.parent-count,
+.parent-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.parent-count .icon-tile,
+.parent-link .icon-tile {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.parent-count > .icon,
+.parent-link > .icon {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+.parent-count strong,
+.parent-count small {
+  display: block;
+  line-height: 1.25;
+}
+
+.parent-count strong {
+  font-size: 20px;
+  color: var(--deep);
+}
+
+.parent-count small,
+.parent-link {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.parent-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.parent-home .card-heading {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.parent-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto 15px;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px;
+  min-block-size: 58px;
+  background: #f9faf7;
+}
+
+.parent-assignment-row + .parent-assignment-row {
+  margin-block-start: 7px;
+}
+
+.parent-assignment-row strong,
+.parent-assignment-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.parent-assignment-row small {
+  color: var(--muted);
+  margin-block-start: 3px;
+  line-height: 1.4;
+}
+
+.parent-assignment-row .tag {
+  white-space: normal;
+}
+
+.parent-assignment-row:hover,
+.parent-count:hover,
+.parent-link:hover {
+  background: #eaf3ea;
+  border-color: #b6cbb6;
+}
+
+.parent-empty {
+  color: var(--muted);
+  padding-block: 5px 8px;
+  font-size: 13px;
+}
+
+.parent-planning .planning-session {
+  grid-template-columns: minmax(85px,95px) minmax(0,1fr) auto;
+}
+
+.parent-planning .planning-session-meta {
+  display: none;
+}
+
+.parent-past-link {
+  min-block-size: 42px;
+  margin-block-start: 6px;
+}
+
+.parent-links {
+  margin-block-start: 16px;
+}
+
+.parent-attendance-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 9px;
+}
+
+@media (max-width: 990px) {
+  .parent-summary {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .parent-home-grid {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  .parent-planning .planning-session {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .parent-home .page-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .parent-counters {
+    gap: 6px;
+  }
+
+  .parent-count {
+    flex-direction: column;
+    align-items: flex-start;
+    min-block-size: 77px;
+    gap: 4px;
+    padding: 8px;
+  }
+
+  .parent-count > .icon {
+    display: none;
+  }
+
+  .parent-count .icon-tile {
+    width: 25px;
+    height: 25px;
+  }
+
+  .parent-link-grid {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .parent-planning .planning-session {
+    gap: 4px;
+  }
+
+  .parent-assignment-row {
+    grid-template-columns: minmax(0,1fr) minmax(55px,auto);
+    gap: 7px;
+  }
+
+  .parent-assignment-row > .icon {
+    display: none;
+  }
+
+  .parent-assignment-row > .tag {
+    max-inline-size: 99px;
+  }
+}

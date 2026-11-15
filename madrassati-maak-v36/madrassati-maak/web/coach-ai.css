@@ -1,0 +1,112 @@
+.coach-modes { display: flex; flex-wrap: wrap; gap: 7px; margin-block: 14px 10px; }
+.coach-modes .tab { background: #fff; color: #285340; border: 1px solid #cadcce; }
+.coach-modes .tab[aria-pressed="true"] { background: #285d42; color: #fff; border-color: #285d42; }
+.coach-ai-status { display: grid; justify-items: start; gap: 12px; padding: 15px; border-radius: 12px; background: #fff; }
+.coach-ai-status p { color: #385443; line-height: 1.5; }
+.coach-ai-chat .coach-bubble span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.coach-ai-form { align-items: flex-end; }
+.coach-ai-form textarea { width: 100%; min-width: 0; min-height: 52px; resize: vertical; }
+.coach-ai-form .send-button { flex-shrink: 0; }
+.coach-ai-note, .coach-ai-feedback { margin-block-start: 8px; font-size: 12px; color: #385443; }
+.coach-ai-feedback:empty { display: none; }
+
+
+#aiCoachPanel {
+  min-inline-size: 0;
+}
+
+.student-coach-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 10px;
+  padding: 9px 12px;
+  border: 1px solid #dce7da;
+  border-radius: 10px;
+  background: #f8fbf7;
+  color: #3c584a;
+  font-size: .82rem;
+}
+
+.student-coach-state > p {
+  flex: 1 1 200px;
+  margin: 0;
+}
+
+.student-coach-state .btn {
+  min-block-size: 36px;
+}
+
+.coach-ai-start {
+  padding: 9px 3px;
+}
+
+.coach-ai-start > p {
+  margin-block-end: 9px;
+  font-size: .92rem;
+}
+
+.coach-suggestions,
+.coach-ai-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.coach-suggestions .btn {
+  white-space: normal;
+  text-align: start;
+  min-block-size: 34px;
+}
+
+.coach-ai-chat {
+  min-inline-size: 0;
+}
+
+.coach-ai-form {
+  gap: 8px;
+}
+
+.coach-ai-form textarea {
+  min-block-size: 56px;
+  line-height: 1.42;
+  font-size: max(16px,.9rem);
+}
+
+.coach-ai-form .send-button {
+  width: auto;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  display: inline-flex;
+  gap: 5px;
+  padding-inline: 9px;
+  white-space: nowrap;
+}
+
+.coach-ai-form .send-button span {
+  font-size: .78rem;
+  font-weight: 640;
+}
+
+.coach-ai-form .send-button:disabled {
+  opacity: .6;
+}
+
+.coach-ai-result .coach-ai-feedback:not(:empty) {
+  margin-block: 6px 0;
+}
+
+.coach-privacy {
+  margin-block-start: 1px;
+}
+
+@media (max-width: 540px) {
+  .coach-ai-form .send-button span {
+    display: none;
+  }
+
+  .coach-suggestions .btn {
+    min-block-size: 41px;
+  }
+}

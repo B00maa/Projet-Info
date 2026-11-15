@@ -1,0 +1,159 @@
+.school-body {
+  --school-ink: #203d37;
+  --school-muted: #566b62;
+  --school-line: #dfe9df;
+  --school-soft: #edf4ec;
+  color: var(--school-ink);
+  background: #f6f8f5;
+  min-block-size: 100vh;
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-block-size: 70px;
+  padding: .75rem max(1rem,calc((100% - 1100px) / 2));
+  border-block-end: 1px solid var(--school-line);
+  background: #fff;
+}
+
+.school-brand, .school-header-tools, .school-actions, .school-tabs, .school-week {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  flex-wrap: wrap;
+}
+
+.school-brand { color: var(--school-ink); text-decoration: none; flex-shrink: 0; }
+.school-header-tools { justify-content: flex-end; }
+.school-user { text-align: end; line-height: 1.35; }
+.school-user span { display: block; color: var(--school-muted); font-size: .82rem; }
+.school-main { max-inline-size: 1148px; margin-inline: auto; padding: clamp(1rem,4vw,2.5rem) 1rem 3rem; }
+.school-body h1, .school-body h2, .school-body h3 { color: var(--school-ink); }
+.school-body h1 { font-size: clamp(1.65rem,4vw,2.25rem); line-height: 1.2; }
+.school-body h2 { font-size: 1.15rem; line-height: 1.35; }
+.school-body h3 { font-size: 1rem; }
+.school-body .card { border-color: var(--school-line); padding: clamp(1rem,3vw,1.4rem); }
+.school-title { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-block-end: 1rem; }
+.school-tabs { display: grid; grid-template-columns: 1fr 1.35fr auto; align-items: start; gap: .9rem; margin-block: 0 1.25rem;
+  border-block-end: 1px solid var(--school-line); padding-block-end: .85rem; }
+.school-nav-group { min-inline-size: 0; }
+.school-nav-group > strong { display: block; margin-inline-start: .62rem; margin-block-end: .28rem;
+  font-size: .76rem; font-weight: 700; color: var(--school-muted); }
+.school-nav-links { display: flex; align-items: center; flex-wrap: wrap; gap: .22rem; }
+.school-tabs a { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .62rem; color: var(--school-ink);
+  text-decoration: none; border-radius: 10px; font-weight: 650; }
+.school-tabs a:hover { background: #f0f4ed; }
+.school-tabs a[aria-current="page"] { background: #e4efe1; color: #234f3c; }
+.school-nav-count { display: inline-grid; place-items: center; min-inline-size: 1.4em; min-block-size: 1.4em; padding-inline: .25em;
+  color: #fff; background: #285d42; border-radius: 999px; font-size: .78em; font-weight: 750; }
+.school-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; align-items: start; }
+.school-stack { display: grid; gap: .8rem; }
+.school-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; }
+.school-fields > *, .school-grid > * { min-inline-size: 0; }
+.school-full { grid-column: 1/-1; }
+.school-body label, .school-body legend { color: var(--school-ink); }
+.school-body textarea { min-block-size: 6rem; }
+.school-body .btn { min-block-size: 39px; white-space: normal; text-align: start; }
+.school-body .btn.primary { background: #285d42; border-color: #285d42; color: #fff; }
+.school-body .btn.primary:hover:not(:disabled) { background: #1c4732; }
+.school-body .btn:disabled { opacity: .52; cursor: not-allowed; }
+.school-body .form > .school-actions { justify-content: flex-start; }
+.school-muted { color: var(--school-muted); }
+.school-small { font-size: .86rem; }
+.school-note { margin: .65rem 0; }
+.school-empty { padding-block: .6rem; color: var(--school-muted); }
+.school-week { justify-content: space-between; margin-block: 0 1rem; }
+.school-week .school-actions { gap: .4rem; }
+.school-week time { font-weight: 650; }
+.school-session { border-block-start: 1px solid var(--school-line); padding-block: .85rem; }
+.school-session:first-child { border-block-start: 0; }
+.school-session:last-child { padding-block-end: 0; }
+.school-session-top { display: flex; align-items: start; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
+.school-meta { display: flex; flex-wrap: wrap; gap: .45rem; color: var(--school-muted); font-size: .85rem; margin-block: .25rem; }
+.school-block { border-block-start: 1px solid var(--school-line); padding-block-start: .8rem; }
+.school-block p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.school-block h3 { margin-block-end: .28rem; }
+.school-block video { display: block; inline-size: min(100%,520px); max-block-size: 50vh; border-radius: 10px; margin-block-end: .5rem; }
+.school-checks { list-style: none; padding: 0; display: grid; gap: .45rem; margin: .55rem 0; }
+.school-checks li { display: flex; align-items: center; gap: .6rem; }
+.school-checks .school-step-number { inline-size: 1.8rem; block-size: 1.8rem; border-radius: 50%; background: var(--school-soft); display: grid; place-items: center; flex-shrink: 0; }
+.school-checks .done { color: #27553c; }
+.school-dialog { position: fixed; inset: 0; margin: auto; width: min(760px,calc(100% - 1.5rem)); max-height: calc(100dvh - 1.5rem); border: 1px solid var(--school-line); padding: 0; overflow: auto; border-radius: 18px; background: #fff; color: var(--school-ink); box-shadow: 0 22px 65px #21382c35; }
+.school-dialog::backdrop { background: #193c3155; }
+.school-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; border-block-end: 1px solid var(--school-line); padding: 1rem 1.3rem; }
+#schoolDialogBody { padding: 1.1rem 1.3rem 1.3rem; }
+.school-choices { border: 1px solid var(--school-line); padding: .6rem; border-radius: 10px; max-block-size: 13rem; overflow: auto; }
+.school-choices legend { padding-inline: .35rem; font-weight: 650; }
+.school-choices label { display: flex; align-items: center; gap: .45rem; margin: .3rem 0; }
+.school-scores { padding: 0; border: 0; min-inline-size: 0; }
+.school-scores:disabled input { background: #f5f7f4; color: var(--school-ink); }
+.school-table { border-collapse: collapse; inline-size: 100%; }
+.school-table th,.school-table td { text-align: start; padding: .65rem; border-block-end: 1px solid var(--school-line); vertical-align: middle; }
+.school-table th { background: var(--school-soft); }
+.school-table .school-mark { inline-size: 5.5rem; }
+.school-table-wrap { overflow-x: auto; }
+.school-form-note { min-block-size: 1.1rem; color: #a43e31; font-size: .85rem; }
+.school-form-note:empty { display: none; }
+.school-auth { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: center; gap: clamp(1rem,4vw,2.2rem); max-inline-size: 880px; margin: 1rem auto; }
+.school-auth img { inline-size: 100%; block-size: auto; }
+.school-auth .school-stack { gap: 1.15rem; }
+.school-auth .school-actions { gap: .55rem; }
+.school-directory-tabs { margin-block-end: 1rem; }
+.school-class-directory li { flex-wrap: wrap; }
+.school-class-directory li > strong { min-inline-size: 5rem; }
+.school-student-coach { max-inline-size: 820px; margin-inline: auto; }
+.school-student-coach .coach-ai-chat { min-block-size: 120px; max-block-size: min(48dvh, 460px); margin-block: .8rem; }
+.school-student-coach .coach-ai-form .btn { flex-shrink: 0; }
+.school-student-coach .coach-ai-form textarea { flex: 1 1 auto; }
+.school-student-coach .coach-ai-note { font-size: .82rem; }
+.school-login-link { display: flex; justify-content: center; margin-block-start: .75rem; }
+.school-period { background: #f0f5ed; border-color: #d9e6d8; }
+.school-period[role="status"] { margin-block-end: 1rem; }
+.school-callout { padding: .8rem 1rem; margin-block-end: 1rem; border-radius: 13px; border: 1px solid #d5e5d5; background: #eaf3e8; }
+.school-child-picker { display: flex; align-items: center; gap: .65rem; margin-block-end: 1rem; }
+.school-child-picker select, .school-body .school-table select, .school-message-layout select {
+  border: 1px solid #c7d9cc; border-radius: 8px; background: #fff; min-block-size: 38px; padding: .35rem .65rem; max-inline-size: 100%;
+}
+.school-child-picker label { font-weight: 650; }
+.school-details > summary { cursor: pointer; font-weight: 650; }
+.school-details > label { display: block; margin-block-start: .6rem; }
+.school-details > summary .tag { margin-inline-start: .45rem; vertical-align: middle; }
+.school-import-table { max-block-size: 22rem; overflow: auto; }
+.school-import-table thead { position: sticky; inset-block-start: 0; }
+.school-import-table code { white-space: nowrap; }
+.school-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.school-card-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,175px),1fr)); gap: .9rem; }
+.school-subject { display: flex; flex-direction: column; align-items: start; justify-content: space-between; gap: .6rem;
+  aspect-ratio: 1.2; text-align: start; background: #f7fbf5; }
+.school-subject strong { color: #234f3c; font-size: 1.12rem; overflow-wrap: anywhere; }
+.school-subject:hover { background: #e9f3e7; border-color: #a4c8aa; }
+.school-message-layout { display: grid; grid-template-columns: minmax(170px, .7fr) minmax(0,1.6fr); gap: 1rem; align-items: start; }
+.school-message-layout select { display: block; inline-size: 100%; margin-block-start: .25rem; }
+.school-thread-list, .school-messages { list-style: none; padding: 0; margin: 0; display: grid; gap: .45rem; }
+.school-thread-list .btn { inline-size: 100%; justify-content: space-between; }
+.school-messages { max-block-size: 28rem; overflow: auto; padding: .3rem; }
+.school-messages li { padding: .65rem .8rem; background: #f2f5f2; border-radius: 12px;
+  justify-self: start; max-inline-size: 88%; min-inline-size: 0; }
+.school-messages li.outgoing { justify-self: end; background: #e5f1e3; }
+.school-inline-check { display: flex; align-items: center; gap: .5rem; }
+.school-pilot-steps { display: grid; gap: .9rem; margin: 0; padding-inline-start: 1.5rem; }
+.school-pilot-steps p { margin-block-start: .18rem; }
+.school-body [hidden] { display: none !important; }
+
+@media (max-width: 690px) {
+  .school-grid, .school-auth, .school-message-layout { grid-template-columns: minmax(0,1fr); }
+  .school-tabs { grid-template-columns: minmax(0,1fr); gap: .45rem; }
+  .school-auth img { max-block-size: 185px; object-fit: contain; }
+  .school-brand strong { font-size: .95rem; }
+  .school-header { padding-inline: .8rem; }
+  .school-header-tools .school-user { display: none; }
+}
+@media (max-width: 480px) {
+  .school-fields { grid-template-columns: minmax(0,1fr); }
+  .school-table th,.school-table td { padding: .55rem; }
+  .school-main { padding-inline: .8rem; }
+  .school-tabs a { padding-inline: .55rem; }
+}
