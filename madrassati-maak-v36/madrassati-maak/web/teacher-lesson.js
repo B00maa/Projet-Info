@@ -2,7 +2,7 @@
 
 const TEACHER_LESSON_MODES={
   chapter:{sections:[6,8],planLimit:12,exercises:[3,4],examples:3,duration:60,tokens:5500,words:[750,1050],minimum:620,sectionWords:36},
-  session:{sections:[2,4],planLimit:6,exercises:[2,3],examples:1,duration:30,tokens:3000,words:[280,480],minimum:190,sectionWords:24}
+  session:{sections:[2,4],planLimit:6,exercises:[2,3],examples:1,duration:30,tokens:2600,words:[280,480],minimum:190,sectionWords:24}
 };
 const TEACHER_LESSON_PUBLISH_LIMIT=20000;
 
