@@ -87,6 +87,9 @@
 #schoolDialogBody { padding: 1.1rem 1.3rem 1.3rem; }
 .school-choices { border: 1px solid var(--school-line); padding: .6rem; border-radius: 10px; min-inline-size: 0; max-block-size: 13rem; overflow: auto; }
 .school-choices legend { padding-inline: .35rem; font-weight: 650; }
+.school-password-setup { max-inline-size: 34rem; margin-inline: auto; }
+.school-account-status { display: grid; gap: .4rem; justify-items: start; max-inline-size: 10rem; }
+.school-parent-tasks { margin-block-end: 1rem; }
 .school-choices label { display: flex; align-items: center; gap: .65rem; padding: .4rem; margin: .12rem 0; cursor: pointer; }
 .school-choices label > span { min-inline-size: 0; overflow-wrap: anywhere; }
 .school-body .form .school-choices input[type="checkbox"] {

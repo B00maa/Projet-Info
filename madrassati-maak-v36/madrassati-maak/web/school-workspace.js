@@ -3,7 +3,7 @@
 const SCHOOL_ADMIN_GROUPS=[
   ['Pilotage',[['dashboard','home'],['planning','calendar'],['absences','clipboard']]],
   ['Scolarité',[['classes','cap'],['eleves','users'],['professeurs','user'],['parents','users'],['notes','chart'],['evaluations','edit'],['comptes','shield']]],
-  ['Outils',[['bibliotheque','folder'],['statistiques','chart'],['messages','mail'],['annonces','bell'],['parametres','settings']]]
+  ['Outils',[['historique','clipboard'],['bibliotheque','folder'],['statistiques','chart'],['messages','mail'],['annonces','bell'],['parametres','settings']]]
 ];
 
 const SCHOOL_STAFF_SPACES={

@@ -4,6 +4,18 @@ const TEACHER_LESSON_LABELS={
   'Niveau pédagogique':'المستوى البيداغوجي','Niveau de la classe':'مستوى القسم',
   'CPGE':'الأقسام التحضيرية','Licence 1 (L1)':'السنة الأولى من الإجازة',
   'Plan du cours':'خطة الدرس','Proposer un plan':'اقتراح خطة',
+  'Valider le plan':'اعتماد الخطة','Valider et remplacer le plan':'اعتماد الخطة واستبدال السابقة',
+  'Cours par chapitres':'إعداد الدرس حسب المحاور','Chapitres rédigés':'المحاور المكتوبة',
+  'Rédigé':'مكتمل',
+  'Générer le chapitre suivant':'إنشاء المحور التالي','Relire les chapitres':'مراجعة المحاور',
+  'Recharger le brouillon':'إعادة تحميل المسودة','Le brouillon du cours est indisponible. Réessayez.':'مسودة الدرس غير متاحة حاليًا. أعيدوا المحاولة.',
+  'Ajoutez les intitulés des chapitres avant de valider le plan.':'أضيفوا عناوين المحاور قبل اعتماد الخطة.',
+  'Le plan est validé. Vous pouvez générer le premier chapitre.':'تم اعتماد الخطة. يمكنكم إنشاء المحور الأول.',
+  'Le chapitre est enregistré.':'تم حفظ المحور.','Tous les chapitres du plan sont rédigés.':'اكتملت كتابة جميع محاور الخطة.',
+  'Le coach rédige le chapitre suivant…':'يكتب المساعد المحور التالي…','Cours en cours de rédaction':'درس قيد الكتابة',
+  'Le brouillon du cours a été actualisé.':'تم تحديث مسودة الدرس.',
+  'Vérifie le sujet, la matière, le niveau et le plan du cours.':'تحقّق من الموضوع والمادة والمستوى وخطة الدرس.',
+  'La classe ou la matière du plan a changé. Valide un nouveau plan.':'تغيّر قسم الخطة أو مادتها. اعتمد خطة جديدة.',
   'Une notion par ligne. Ajoutez, retirez ou réorganisez les notions avant la génération.':'اكتبوا محورًا في كل سطر. يمكن إضافة المحاور أو حذفها أو إعادة ترتيبها قبل الإنشاء.',
   'Le plan est prêt à modifier.':'الخطة جاهزة للتعديل.',
   'Le plan contient des intitulés répétés, trop longs ou trop nombreux.':'تتضمّن الخطة عناوين مكرّرة أو طويلة أو أكثر من العدد المسموح.',
@@ -35,7 +47,122 @@ function teacherLessonPlanControls(settings) {
   return '<section class="teacher-lesson-plan"><label for="teacherLessonPlanText">Plan du cours</label>'+
     '<textarea id="teacherLessonPlanText" name="lessonPlanText" rows="4" maxlength="1452" dir="auto" aria-describedby="teacherLessonPlanHint">'+esc(settings.lessonPlanText||'')+'</textarea>'+
     '<small id="teacherLessonPlanHint" class="muted">Une notion par ligne. Ajoutez, retirez ou réorganisez les notions avant la génération.</small>'+
-    '<button type="button" class="btn secondary small" data-action="teacher-coach-plan">Proposer un plan</button></section>';
+    '<div class="homework-actions"><button type="button" class="btn secondary small" data-action="teacher-coach-plan">Proposer un plan</button>'+
+    (teacherCoachSchool()?'<button type="button" class="btn secondary small" data-action="teacher-course-start">'+
+      (teacherCoach.course?'Valider et remplacer le plan':'Valider le plan')+'</button>':'')+'</div></section>';
+}
+
+function teacherCoursePanel() {
+  const session=teacherCoach;
+  const course=session.course;
+  if(!course) return session.courseReadError?
+    '<p class="teacher-coach-status"><span>Le brouillon du cours est indisponible. Réessayez.</span> <button type="button" class="btn secondary small" data-action="teacher-course-load">Recharger le brouillon</button></p>':'';
+  const {chapters,context}=course;
+  const plan=context.lessonPlan;
+  return `<section class="teacher-lesson-plan" id="teacherCourseProgress" aria-labelledby="teacherCourseTitle">
+    <h3 id="teacherCourseTitle">Cours par chapitres</h3><strong data-no-i18n="true" dir="auto">${esc(context.topic)}</strong>
+    <p class="small muted"><span>Chapitres rédigés</span> <bdi dir="ltr">${chapters.length} / ${plan.length}</bdi></p>
+    <ol>${plan.map((heading,i)=>`<li ${i===chapters.length?'aria-current="step"':''}><bdi data-no-i18n="true">${esc(heading)}</bdi>
+      ${i<chapters.length?'<span class="tag mint">Rédigé</span>':''}</li>`).join('')}</ol>
+    <div class="homework-actions">
+      ${chapters.length<plan.length?'<button type="button" class="btn primary small" data-action="teacher-course-next">Générer le chapitre suivant</button>':''}
+      ${chapters.length?'<button type="button" class="btn secondary small" data-action="teacher-course-preview">Relire les chapitres</button>':''}
+    </div></section>`;
+}
+
+function teacherCoursePreviewDraft(course) {
+  if(!course?.chapters.length)return null;
+  const {context,chapters}=course;
+  const lessonData={
+    objectives:chapters.map(chapter=>chapter.objective),
+    sections:chapters.map(chapter=>chapter.section),
+    recap:chapters.map((chapter,i)=>(i+1)+'. '+chapter.takeaway).join('\n'),
+    exercises:chapters.map(chapter=>chapter.exercise)
+  };
+  const lessonLevelLabel=context.lessonLevel&&context.lessonLevel!=='class'?TEACHER_LESSON_LEVELS[context.lessonLevel][context.language]:undefined;
+  return {...context,title:context.topic,summary:lessonData.objectives[0],subjectName:context.subject,levelName:context.level,lessonLevelLabel,
+    duration:context.minutes||TEACHER_LESSON_MODES[context.lessonMode||'chapter'].duration,source:'ai',fromChapterPlan:true,
+    pendingChapters:chapters.length<context.lessonPlan.length,lessonData,...formatTeacherLesson(lessonData,context.language)};
+}
+
+function loadTeacherCourse() {
+  const session=teacherCoach;
+  if(!teacherCoachSchool()||session.courseLoaded||session.courseLoad)return session.courseLoad;
+  session.courseLoad=schRequest('/coach/course').then(({course})=>{
+    session.course=course;
+    session.courseLoaded=true;
+    session.courseReadError=false;
+    if(!session.drafts.lesson||session.drafts.lesson.fromChapterPlan)session.drafts.lesson=teacherCoursePreviewDraft(course);
+  }).catch(()=>{
+    session.courseReadError=true;
+  }).finally(()=>{
+    session.courseLoad=null;
+    if(session===teacherCoach&&!session.request)refreshTeacherCoach();
+  });
+  return session.courseLoad;
+}
+
+async function changeTeacherCourse(action) {
+  const session=teacherCoach;
+  if(!teacherCoachSchool()||session.task!=='lesson'||session.request)return;
+  let context;
+  if(action==='start') {
+    const form=document.getElementById('teacherCoachForm');
+    if(!form)return;
+    context=teacherDraftContext(Object.fromEntries(new FormData(form)),true);
+    if(!context)return;
+    if(!context.lessonPlan) return schToast('Ajoutez les intitulés des chapitres avant de valider le plan.');
+    context={...context,subject:context.subjectName,level:context.levelName};
+  }
+  if(action==='next'&&!session.course)return;
+  const loading=loadTeacherCourse();
+  const request=new AbortController();
+  session.request=request;
+  session.activity=action==='next'?'section':'course-start';
+  session.feedback='';
+  session.failure='';
+  const timeout=setTimeout(()=>request.abort('timeout'),70000);
+  refreshTeacherCoach('[data-action="teacher-coach-cancel"]');
+  try {
+    await loading;
+    if(session!==teacherCoach||request.signal.aborted)return;
+    const {ok,data}=await requestAICoach({action,revision:session.course?.revision||0,context},request.signal,'/api/school/coach/course');
+    if(request.signal.aborted||session!==teacherCoach)return;
+    if(ok&&data.course) {
+      session.course=data.course;
+      session.courseLoaded=true;
+      session.courseReadError=false;
+      if(action==='next'||session.drafts.lesson?.fromChapterPlan)session.drafts.lesson=teacherCoursePreviewDraft(data.course);
+      const complete=data.course.chapters.length===data.course.context.lessonPlan.length;
+      session.feedback=action==='start'?'Le plan est validé. Vous pouvez générer le premier chapitre.':
+        complete?'Tous les chapitres du plan sont rédigés.':'Le chapitre est enregistré.';
+    } else if(data.code==='course-changed') {
+      session.courseLoaded=false;
+      await loadTeacherCourse();
+      session.feedback='Le brouillon du cours a été actualisé.';
+    } else {
+      if(AI_COACH_ACCOUNT_STATES.includes(data.status))session.access=data.status;
+      session.failure=AI_COACH_ACCOUNT_STATES.includes(data.status)?'':data.status||'';
+      session.retryAt=coachRetryDeadline(data.retryAfter);
+      session.feedback=data.message||'';
+    }
+  } catch {
+    if(!request.signal.aborted)session.failure='network-error';
+    else if(request.signal.reason==='timeout')session.failure='timeout';
+  } finally {
+    clearTimeout(timeout);
+    session.request=null;
+    session.activity='';
+    if(session===teacherCoach)refreshTeacherCoach('[data-action="teacher-course-next"], [data-action="teacher-course-preview"]');
+  }
+}
+
+function showTeacherCourseDraft() {
+  const draft=teacherCoursePreviewDraft(teacherCoach.course);
+  if(!draft)return;
+  if(!teacherCoach.drafts.lesson?.fromChapterPlan)teacherCoach.drafts.lesson=draft;
+  refreshTeacherCoach();
+  viewTeacherCoachOutput();
 }
 
 async function runTeacherLessonTool(context,parameters,localResult,apply,focus) {

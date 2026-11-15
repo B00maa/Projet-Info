@@ -71,12 +71,17 @@ function schFatiguePage() {
 
 function schParentLifeSummary() {
   const data=schoolUI.data;
-  const count=data.absences?.filter(item=>item.status==='absent'&&item.date>=data.week.start&&item.date<=data.week.end).length||0;
-  const current=schFatigueCurrent();
-  if(!count&&!current)return '';
-  return `<div class="school-callout school-actions">
-    ${count?`<a class="btn secondary small" href="#absences"><span>Absences cette semaine</span> · ${schValue(count)}</a>`:''}
-    ${current?`<a class="btn secondary small" href="#fatigue">${current.status==='pending'?'Demande de mode fatigue':SCHOOL_FATIGUE_LABELS.approved}</a>`:''}</div>`;
+  const absences=data.absences?.filter(item=>item.status==='absent'&&item.justification_status!=='accepted'&&
+    item.date>=data.week.start&&item.date<=data.week.end).length||0;
+  const tasks=[
+    ['fatigue','Demande de mode fatigue',schFatigueCurrent()?.status==='pending'?1:0],
+    ['absences','Absences à justifier auprès de l’établissement',absences],
+    ['messages','Messages non lus',data.notices?.messages||0]
+  ].filter(([, ,count])=>count);
+  return `<section class="card school-stack school-parent-tasks"><h2>À traiter cette semaine</h2>
+    ${tasks.length?`<div class="school-actions">${tasks.map(([page,label,count])=>
+      `<a class="btn secondary small" href="#${page}"><span>${label}</span> · ${schValue(count)}</a>`).join('')}</div>`:
+      '<p class="school-muted">Aucune action en attente.</p>'}</section>`;
 }
 
 async function schFetchDialog(button,path,render) {

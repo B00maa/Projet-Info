@@ -106,6 +106,21 @@ function schAdminStatistics() {
       </table></div>`:schEmpty('Crée une classe pour commencer.')}</section>`;
 }
 
+function schAdminHistory() {
+  const {page,more,rows}=schoolUI.data.accountHistory;
+  const labels={'class-changed':'Classe de l’élève modifiée','parent-linked':'Élèves associés au parent modifiés','access-reset':'Accès scolaire réinitialisé'};
+  return `<div class="school-title school-admin-heading"><h1>Historique des comptes</h1></div>
+    <section class="card school-stack">${rows.length?`<div class="school-table-wrap"><table class="school-table">
+      <thead><tr><th scope="col">Date et heure</th><th scope="col">Effectué par</th><th scope="col">Compte concerné</th><th scope="col">Action</th></tr></thead>
+      <tbody>${rows.map(row=>`<tr><td>${schValue(schTimestamp(row.occurred_at))}</td><td>${schValue(row.actor)}</td>
+        <td>${schValue(row.member)}</td><td>${labels[row.action]}</td></tr>`).join('')}</tbody>
+    </table></div>`:schEmpty('Aucune modification de compte à afficher.')}
+    <div class="school-actions">
+      ${page>1?`<a class="btn secondary small" href="#historique?page=${page-1}">Page précédente</a>`:''}
+      ${more?`<a class="btn secondary small" href="#historique?page=${page+1}">Page suivante</a>`:''}
+    </div></section>`;
+}
+
 function schAdminSettings() {
   return `<div class="school-title school-admin-heading"><h1>Paramètres</h1></div>
     <div class="school-grid">
