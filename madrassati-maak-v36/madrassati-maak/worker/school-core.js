@@ -128,6 +128,17 @@ async function schoolAccountClasses(db,role,data) {
   return {classes,subject};
 }
 
+async function schoolGuardianSelection(db,values,parentId=null) {
+  const children=schoolDistinctIds(values,20);
+  schoolRequire(parentId||children.length,'Associe au moins un élève à ce parent.');
+  const matching=await schoolAll(db,`SELECT id FROM school_accounts
+    WHERE role='eleve' AND id IN (SELECT value FROM json_each(?))
+      AND (active=1 OR EXISTS (SELECT 1 FROM school_guardians g WHERE g.parent_id=? AND g.student_id=school_accounts.id))`,
+  [JSON.stringify(children),parentId]);
+  schoolRequire(matching.length===children.length,'Un des élèves est introuvable.');
+  return children;
+}
+
 async function schoolAccountSave(db,account,data) {
   schoolRoles(account,'administration');
   const name = schoolText(data.name,100);
@@ -140,11 +151,7 @@ async function schoolAccountSave(db,account,data) {
     'Vérifie le nom, l’adresse et le rôle.');
   schoolRequire(!schoolAuth||!data.login||schoolValidLogin(login),'L’identifiant doit contenir de 3 à 40 lettres, chiffres, points ou tirets.');
   const {classes,subject}=await schoolAccountClasses(db,role,data);
-  const children = role === 'parent' ? schoolDistinctIds(data.childIds,20) : [];
-  schoolRequire(role !== 'parent' || children.length,'Associe au moins un élève à ce parent.');
-  for (const id of children) {
-    schoolRequire(await schoolFirst(db,"SELECT id FROM school_accounts WHERE id=? AND role='eleve' AND active=1",[id]),'Un des élèves est introuvable.');
-  }
+  const children=role==='parent'?await schoolGuardianSelection(db,data.childIds):[];
   const access=schoolAuth?await schoolNewCredential(login||schoolNewLogin(id,role)):null;
   const statements = [schoolQuery(db,'INSERT INTO school_accounts(id,email,name,role) VALUES(?,?,?,?)',[id,email,name,role])];
   if (role === 'eleve') statements.push(schoolQuery(db,'INSERT INTO school_enrolments(student_id,class_id) VALUES(?,?)',[id,classes[0]]));
@@ -172,19 +179,26 @@ async function schoolAccountEdit(db,account,data) {
   schoolRoles(account,'administration');
   const name=schoolText(data.name,100);
   schoolRequire(schoolId(data.id)&&Number.isInteger(data.revision)&&name,'Indique un nom valide.');
-  const member=await schoolFirst(db,"SELECT id,role FROM school_accounts WHERE id=? AND role IN ('eleve','professeur') AND archived_at IS NULL",[data.id]);
+  const member=await schoolFirst(db,"SELECT id,role FROM school_accounts WHERE id=? AND role IN ('eleve','professeur','parent') AND archived_at IS NULL",[data.id]);
   if(!member) throw new SchoolError(404,'Ce compte est introuvable.');
   const {classes,subject}=await schoolAccountClasses(db,member.role,data);
   const guard='EXISTS (SELECT 1 FROM school_accounts WHERE id=? AND revision=? AND archived_at IS NULL)';
   const condition=[member.id,data.revision];
-  const changes=member.role==='eleve' ? [
+  const changes=[];
+  if(member.role==='eleve') changes.push(
     schoolQuery(db,`INSERT INTO school_enrolments(student_id,class_id) SELECT ?,? WHERE ${guard}
-      ON CONFLICT(student_id) DO UPDATE SET class_id=excluded.class_id`,[member.id,classes[0],...condition])
-  ] : [
+      ON CONFLICT(student_id) DO UPDATE SET class_id=excluded.class_id`,[member.id,classes[0],...condition]));
+  if(member.role==='professeur') changes.push(
     schoolQuery(db,`DELETE FROM school_teaching WHERE teacher_id=? AND ${guard}`,[member.id,...condition]),
     schoolQuery(db,`INSERT INTO school_teaching(teacher_id,class_id,subject)
-      SELECT ?,value,? FROM json_each(?) WHERE ${guard}`,[member.id,subject,JSON.stringify(classes),...condition])
-  ];
+      SELECT ?,value,? FROM json_each(?) WHERE ${guard}`,[member.id,subject,JSON.stringify(classes),...condition]));
+  if(member.role==='parent') {
+    const children=await schoolGuardianSelection(db,data.childIds,member.id);
+    changes.push(
+      schoolQuery(db,`DELETE FROM school_guardians WHERE parent_id=? AND ${guard}`,[member.id,...condition]),
+      schoolQuery(db,`INSERT INTO school_guardians(parent_id,student_id)
+        SELECT ?,value FROM json_each(?) WHERE ${guard}`,[member.id,JSON.stringify(children),...condition]));
+  }
   const results=await db.batch([
     ...changes,
     schoolQuery(db,'UPDATE school_accounts SET name=?,revision=revision+1 WHERE id=? AND revision=? AND archived_at IS NULL',
@@ -412,6 +426,7 @@ async function handleSchool(request,env,url) {
       if (route.startsWith('/file/')) return await schoolSessionFile(env,account,route.slice(6),url,request);
       return await schoolLifeRead(env,account,route,url);
     }
+    if (route === '/auth/password') return await schoolChangePassword(request,db,account,await schoolJson(request,4096));
     if (route === '/session') return json({id:await schoolSessionSave(env,account,request)});
     if (route === '/coach') {
       schoolRoles(account,'professeur','eleve');
