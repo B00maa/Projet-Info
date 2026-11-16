@@ -69,7 +69,7 @@ const SCHOOL_AR={
   'La publication a été programmée.':'تمت برمجة النشر.','Les notes ont été publiées.':'تم نشر النقط.',
   'La programmation a été annulée.':'أُلغيت برمجة النشر.','Les notes ont été enregistrées.':'تم حفظ النقط.',
   'Se déconnecter':'تسجيل الخروج','Connexion scolaire':'تسجيل الدخول المدرسي',
-  'Explorer la maquette':'استكشاف النموذج','Actualiser':'تحديث','Choisis une classe':'اختر قسماً',
+  'Actualiser':'تحديث','Choisis une classe':'اختر قسماً',
   'Ouvre le fichier joint':'افتح الملف المرفق','Aucun support joint':'لا يوجد مورد مرفق',
   'Rôle':'الدور','Compte scolaire':'حساب مدرسي','Élève suivi':'التلميذ المتابَع',
   'Les horaires du planning utilisent l’heure du Maroc.':'تستخدم مواعيد الجدول توقيت المغرب.',
@@ -319,10 +319,9 @@ function schAuth() {
         ${schError()}<button type="submit" class="btn primary school-auth-submit"><span>Se connecter à l’école</span>${siteIcon('arrow','sm')}</button>
       </form>`:`<p role="status" class="school-muted">${schEsc(error?.message||'Chargement de l’espace scolaire…')}</p>
         ${error?'<div><button type="button" class="btn secondary" data-school-action="refresh">Réessayer</button></div>':''}`}
-      <div class="school-auth-footer">
-        <div id="schoolSetupAction" ${ready&&schShowSetup()?'':'hidden'}><button type="button" class="btn secondary small"
+      <div id="schoolSetupAction" ${ready&&schShowSetup()?'':'hidden'}>
+        <div class="school-auth-footer"><button type="button" class="btn secondary small"
           data-school-action="activate-administration">${siteIcon('settings','sm')}<span>Activer l’administration</span></button></div>
-        <a class="text-link" href="/">Explorer la maquette</a>
       </div>
     </div>
   </section>`;
