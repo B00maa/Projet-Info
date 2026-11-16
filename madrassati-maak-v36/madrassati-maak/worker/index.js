@@ -433,17 +433,8 @@ export default {
   fetch(request,env) {
     const url = new URL(request.url);
     const {pathname} = url;
-    if (pathname === '/ecole') return serveAsset(request,'/school.html');
-    if (pathname.startsWith(SCHOOL_PREFIX+'/')) return handleSchool(request,env,url);
-    if (pathname === '/api/coach/status') {
-      if (request.method !== 'GET') return json({status:'invalid'},405,{Allow:'GET'});
-      const providers=coachProviders(env,url.searchParams.get('profile')==='teacher');
-      return json({status:providers.length?coachAuthorization(request,env):'needs-key'});
-    }
-    if (pathname === '/api/coach') {
-      if (request.method !== 'POST') return json({status:'invalid'},405,{Allow:'POST'});
-      return replyToCoach(request,env);
-    }
-    return serveAsset(request,pathname === '/' ? '/index.html' : pathname);
+    if (pathname === '/' || pathname === '/ecole' || pathname === '/index.html')return serveAsset(request,'/school.html');
+    if (pathname.startsWith(SCHOOL_PREFIX+'/'))return handleSchool(request,env,url);
+    return serveAsset(request,pathname);
   }
 };

@@ -76,26 +76,6 @@ function schoolHomeworkList(db,account,child) {
   [...Array(3).fill(Number(account.role==='professeur')),student,...scope.args]);
 }
 
-function schoolDueHomework(db,children,until,limit) {
-  return schoolAll(db,`WITH due AS (
-    SELECT e.student_id,s.id,s.title,s.subject,s.due_date,
-      ROW_NUMBER() OVER (PARTITION BY e.student_id ORDER BY s.due_date,s.title,s.id) AS position
-    FROM school_enrolments e JOIN school_sessions s ON s.class_id=e.class_id
-    LEFT JOIN school_submissions p ON p.session_id=s.id AND p.student_id=e.student_id
-    WHERE e.student_id IN (SELECT value FROM json_each(?)) AND s.exercise<>'' AND s.due_date<=? AND p.submitted_at IS NULL
-  ) SELECT student_id,id,title,subject,due_date FROM due WHERE position<=? ORDER BY position,id`,
-  [JSON.stringify(children.map(child=>child.id)),until,limit]);
-}
-
-function schoolHomeworkCounts(db,account,child) {
-  const scope=schoolSessionScope(account,child);
-  return schoolFirst(db,`SELECT COUNT(*) FILTER(WHERE p.submitted_at IS NULL) AS pending,
-    COUNT(*) FILTER(WHERE p.submitted_at IS NOT NULL AND p.corrected_at IS NULL) AS submitted,
-    COUNT(p.corrected_at) AS corrected
-    FROM school_sessions s LEFT JOIN school_submissions p ON p.session_id=s.id AND p.student_id=?
-    WHERE (${scope.where}) AND s.exercise<>''`,[child.id,...scope.args]);
-}
-
 async function schoolHomeworkSession(db,account,child,id) {
   schoolRoles(account,'professeur','eleve','parent');
   schoolRequire(schoolId(id),'Devoir invalide.');
@@ -142,14 +122,16 @@ async function schoolHomeworkSubmit(env,account,request) {
   const variant=previous?.variant || (session.short_exercise&&await schoolActiveFatigue(db,account.id)?'short':'full');
   if(form.get('variant')&&form.get('variant')!==variant) throw new SchoolError(409,'La consigne a changé. Rouvre le devoir.');
   return schoolWithUpload(env,upload,previous?.file_key,async()=>{
-    const result=await schoolRun(db,`INSERT INTO school_submissions(session_id,student_id,answer,variant,submitted_at,file_key,file_name,file_size)
-      SELECT s.id,?,?,?,?,?,?,? FROM school_sessions s JOIN school_enrolments e ON e.class_id=s.class_id
-      WHERE s.id=? AND s.exercise<>'' AND e.student_id=?
-      ON CONFLICT(session_id,student_id) DO UPDATE SET answer=excluded.answer,submitted_at=excluded.submitted_at,
-      file_key=excluded.file_key,file_name=excluded.file_name,file_size=excluded.file_size,revision=school_submissions.revision+1
-      WHERE school_submissions.revision=? AND school_submissions.corrected_at IS NULL`,
-    [account.id,answer,variant,Date.now(),upload?.key??previous?.file_key??null,upload?.name??previous?.file_name??null,
-      upload?.size??previous?.file_size??null,session.id,account.id,revision]);
+    const eligible=`EXISTS (SELECT 1 FROM school_sessions s JOIN school_enrolments e ON e.class_id=s.class_id
+      WHERE s.id=? AND s.exercise<>'' AND e.student_id=? AND s.cancelled_at IS NULL)`;
+    const fields=[answer,Date.now(),upload?.key??previous?.file_key??null,upload?.name??previous?.file_name??null,
+      upload?.size??previous?.file_size??null];
+    const result=previous?await schoolRun(db,`UPDATE school_submissions SET answer=?,submitted_at=?,file_key=?,
+      file_name=?,file_size=?,revision=revision+1 WHERE session_id=? AND student_id=? AND revision=?
+      AND corrected_at IS NULL AND ${eligible}`,[...fields,session.id,account.id,revision,session.id,account.id]):
+      await schoolRun(db,`INSERT IGNORE INTO school_submissions
+        (session_id,student_id,variant,answer,submitted_at,file_key,file_name,file_size)
+        SELECT ?,?,?,?,?,?,?,? WHERE ${eligible}`,[session.id,account.id,variant,...fields,session.id,account.id]);
     if(!schoolChanged(result)) throw new SchoolError(409,'Le devoir a changé ou a déjà été corrigé.');
   });
 }

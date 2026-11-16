@@ -81,7 +81,7 @@ async function schoolAnnouncementPublish(db,account,data) {
 async function schoolAnnouncementRead(db,account,data) {
   schoolRequire(schoolId(data.id),'Annonce invalide.');
   const scope=schoolAnnouncementScope(account);
-  const result=await schoolRun(db,`INSERT OR IGNORE INTO school_announcement_reads(announcement_id,account_id,read_at)
+  const result=await schoolRun(db,`INSERT IGNORE INTO school_announcement_reads(announcement_id,account_id,read_at)
     SELECT n.id,?,? FROM school_announcements n WHERE n.id=? AND n.require_receipt=1 AND n.author_id<>?
     AND ${scope.where}`,[account.id,Date.now(),data.id,account.id,...scope.args]);
   if(!schoolChanged(result)) {

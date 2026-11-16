@@ -90,8 +90,12 @@ async function schoolClientLimit(request,db,scope,maximum,now) {
 }
 
 function schoolRecordAttempt(db,key,now,until) {
-  return schoolFirst(db,'INSERT INTO school_login_limits(client_key,expires_at,failures) VALUES(?,?,1) ON CONFLICT(client_key) DO UPDATE SET failures=CASE WHEN expires_at<=? THEN 1 ELSE failures+1 END, expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at ELSE expires_at END RETURNING failures,expires_at',
+  return db.transaction(async tx=>{
+    await schoolRun(tx,`INSERT INTO school_login_limits(client_key,expires_at,failures) VALUES(?,?,1)
+      ON DUPLICATE KEY UPDATE failures=IF(expires_at<=?,1,failures+1),expires_at=IF(expires_at<=?,VALUES(expires_at),expires_at)`,
     [key,until,now,now]);
+    return schoolFirst(tx,'SELECT failures,expires_at FROM school_login_limits WHERE client_key=?',[key]);
+  });
 }
 
 async function schoolSignIn(request,db,data) {
@@ -123,10 +127,8 @@ async function schoolSignIn(request,db,data) {
   }
   try {
     await db.batch([
-      schoolQuery(db,`DELETE FROM school_student_sessions WHERE token_digest IN (
-        SELECT token_digest FROM school_student_sessions WHERE expires_at<=? LIMIT 200)`,[now]),
-      schoolQuery(db,`DELETE FROM school_login_limits WHERE client_key IN (
-        SELECT client_key FROM school_login_limits WHERE expires_at<=? LIMIT 200)`,[now])
+      schoolQuery(db,`DELETE FROM school_student_sessions WHERE expires_at<=? LIMIT 200`,[now]),
+      schoolQuery(db,`DELETE FROM school_login_limits WHERE expires_at<=? LIMIT 200`,[now])
     ]);
   } catch { console.warn('School session cleanup failed'); }
   return json({signedIn:true},200,{'Set-Cookie':schoolSessionCookie(token,SCHOOL_LOGIN_LIFE/1000)});
@@ -197,8 +199,9 @@ async function schoolResetAccess(db,account,data) {
   const access=await schoolNewCredential(member.login||schoolNewLogin(member.id,member.role));
   const [result]=await db.batch([schoolQuery(db,`INSERT INTO school_student_access(student_id,login,code_digest,onboarding_required)
     SELECT id,?,?,1 FROM school_accounts WHERE id=? AND active=1 AND role<>'administration'
-    ON CONFLICT(student_id) DO UPDATE SET code_digest=excluded.code_digest,revision=revision+1
-    WHERE school_student_access.revision=?`,[access.login,access.digest,member.id,data.revision]),
+    ON DUPLICATE KEY UPDATE
+      code_digest=IF(school_student_access.revision=?,VALUES(code_digest),school_student_access.code_digest),
+      revision=IF(school_student_access.code_digest=VALUES(code_digest),school_student_access.revision+1,school_student_access.revision)`,[access.login,access.digest,member.id,data.revision]),
   schoolAccountEvent(db,account.id,member.id,'access-reset',
     'EXISTS (SELECT 1 FROM school_student_access WHERE student_id=? AND code_digest=?)',[member.id,access.digest])]);
   if(!schoolChanged(result)) throw new SchoolError(409,'Le compte a changé. Actualise la liste.');
@@ -321,16 +324,16 @@ async function schoolImportStudents(db,account,data,commit) {
   }));
   const payload=JSON.stringify(entries.map(row=>row.insert));
   const statements=[
-    schoolQuery(db,`INSERT INTO school_classes(id,name) SELECT json_extract(value,'$.id'),json_extract(value,'$.name') FROM json_each(?)`,[JSON.stringify(toCreate)]),
+    schoolQuery(db,`INSERT INTO school_classes(id,name) SELECT JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.id')),JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.name')) FROM JSON_TABLE(?, '$[*]' COLUMNS (value JSON PATH '$')) j`,[JSON.stringify(toCreate)]),
     schoolQuery(db,`INSERT INTO school_accounts(id,email,name,role)
       SELECT CASE WHEN (SELECT COUNT(*) FROM school_enrolments e JOIN school_accounts a ON a.id=e.student_id AND a.active=1
-        WHERE e.class_id=json_extract(j.value,'$.classId'))
-        =json_extract(j.value,'$.expected') THEN json_extract(j.value,'$.id') END,
-        json_extract(j.value,'$.email'),json_extract(j.value,'$.name'),'eleve' FROM json_each(?) j`,[payload]),
+        WHERE e.class_id=JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.classId')))
+        =JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.expected')) THEN JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.id')) END,
+        JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.email')),JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.name')),'eleve' FROM JSON_TABLE(?, '$[*]' COLUMNS (value JSON PATH '$')) j`,[payload]),
     schoolQuery(db,`INSERT INTO school_enrolments(student_id,class_id)
-      SELECT json_extract(value,'$.id'),json_extract(value,'$.classId') FROM json_each(?)`,[payload]),
+      SELECT JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.id')),JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.classId')) FROM JSON_TABLE(?, '$[*]' COLUMNS (value JSON PATH '$')) j`,[payload]),
     schoolQuery(db,`INSERT INTO school_student_access(student_id,login,code_digest,onboarding_required)
-      SELECT json_extract(value,'$.id'),json_extract(value,'$.login'),json_extract(value,'$.digest'),1 FROM json_each(?)`,[payload])
+      SELECT JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.id')),JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.login')),JSON_UNQUOTE(JSON_EXTRACT(j.value,'$.digest')),1 FROM JSON_TABLE(?, '$[*]' COLUMNS (value JSON PATH '$')) j`,[payload])
   ];
   try { await db.batch(statements); }
   catch(error) {

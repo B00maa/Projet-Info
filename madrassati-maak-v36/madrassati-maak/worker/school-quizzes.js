@@ -37,12 +37,12 @@ async function schoolQuizResults(db,account,id) {
   schoolRequire(schoolId(id),'Séance invalide.');
   const scope=schoolSessionScope(account,null);
   const quiz=await schoolFirst(db,`SELECT s.title,c.name AS class_name,q.questions,
-    (SELECT json_group_array(json_object('name',roster.name,'answers',json(roster.answers),'submittedAt',roster.submitted_at))
+    (SELECT JSON_ARRAYAGG(JSON_OBJECT('name',roster.name,'answers',roster.answers,'submittedAt',roster.submitted_at))
       FROM (
         SELECT a.name,t.answers,t.submitted_at FROM school_enrolments e
         JOIN school_accounts a ON a.id=e.student_id AND a.role='eleve' AND a.active=1
         LEFT JOIN school_quiz_attempts t ON t.session_id=q.session_id AND t.student_id=e.student_id AND t.quiz_revision=q.revision
-        WHERE e.class_id=s.class_id ORDER BY a.name COLLATE NOCASE,a.id
+        WHERE e.class_id=s.class_id ORDER BY a.name,a.id
       ) roster) AS roster
     FROM school_sessions s JOIN school_classes c ON c.id=s.class_id
     JOIN school_session_quizzes q ON q.session_id=s.id
@@ -52,7 +52,7 @@ async function schoolQuizResults(db,account,id) {
   const items=JSON.parse(quiz.questions);
   const questions=items.map(({prompt})=>({prompt,correct:0}));
   let completed=0;
-  const roster=JSON.parse(quiz.roster).map(({name,answers,submittedAt})=>{
+  const roster=JSON.parse(quiz.roster||'[]').sort((a,b)=>a.name.localeCompare(b.name,'fr')).map(({name,answers,submittedAt})=>{
     if(answers===null)return {name,score:null,submittedAt:null};
     completed++;
     const {score,corrections}=schoolQuizResult(items,answers);
@@ -69,11 +69,14 @@ async function schoolQuizSave(db,account,data) {
   schoolRequire(schoolId(data.id)&&Number.isInteger(data.revision)&&data.revision>=0,'Quiz invalide.');
   await schoolSessionDetails(db,account,null,data.id);
   const questions=schoolQuizQuestions(data.questions);
-  const result=await schoolRun(db,`INSERT INTO school_session_quizzes(session_id,questions)
-    SELECT s.id,? FROM school_sessions s JOIN school_teaching t ON t.teacher_id=s.teacher_id AND t.class_id=s.class_id
-    WHERE s.id=? AND s.teacher_id=? AND (SELECT COALESCE(MAX(revision),0) FROM school_session_quizzes WHERE session_id=s.id)=?
-    ON CONFLICT(session_id) DO UPDATE SET questions=excluded.questions,revision=school_session_quizzes.revision+1`,
-  [JSON.stringify(questions),data.id,account.id,data.revision]);
+  const own=`SELECT 1 FROM school_sessions s JOIN school_teaching t ON t.teacher_id=s.teacher_id AND t.class_id=s.class_id
+    WHERE s.id=? AND s.teacher_id=? AND s.cancelled_at IS NULL`;
+  const encoded=JSON.stringify(questions);
+  const result=data.revision?await schoolRun(db,`UPDATE school_session_quizzes
+    SET questions=?,revision=revision+1 WHERE session_id=? AND revision=? AND EXISTS (${own})`,
+    [encoded,data.id,data.revision,data.id,account.id]):
+    await schoolRun(db,`INSERT IGNORE INTO school_session_quizzes(session_id,questions)
+      SELECT ?,? WHERE EXISTS (${own})`,[data.id,encoded,data.id,account.id]);
   if(!schoolChanged(result))throw new SchoolError(409,'Le quiz ou la séance a changé. Rouvre le quiz.');
   return {saved:true};
 }
@@ -92,9 +95,17 @@ async function schoolQuizSubmit(db,account,data) {
   const result=await schoolRun(db,`INSERT INTO school_quiz_attempts(session_id,student_id,quiz_revision,answers,submitted_at)
     SELECT q.session_id,?,q.revision,?,? FROM school_session_quizzes q
     JOIN school_sessions s ON s.id=q.session_id JOIN school_enrolments e ON e.class_id=s.class_id AND e.student_id=?
-    WHERE q.session_id=? AND q.revision=?
-    ON CONFLICT(session_id,student_id,quiz_revision) DO UPDATE SET answers=excluded.answers,submitted_at=excluded.submitted_at`,
+    WHERE q.session_id=? AND q.revision=? AND s.cancelled_at IS NULL
+    ON DUPLICATE KEY UPDATE answers=VALUES(answers),submitted_at=VALUES(submitted_at)`,
   [account.id,JSON.stringify(answers),Date.now(),account.id,data.id,data.revision]);
-  if(!schoolChanged(result))throw new SchoolError(409,'Le quiz ou la classe a changé. Rouvre le quiz.');
-  return {result:schoolQuizResult(items,answers)};
+  if(!schoolChanged(result)&&!await schoolFirst(db,`SELECT 1 FROM school_quiz_attempts a
+    JOIN school_session_quizzes q ON q.session_id=a.session_id AND q.revision=a.quiz_revision
+    JOIN school_sessions s ON s.id=q.session_id AND s.cancelled_at IS NULL
+    JOIN school_enrolments e ON e.student_id=a.student_id AND e.class_id=s.class_id
+    WHERE a.session_id=? AND a.student_id=? AND a.quiz_revision=?`,[data.id,account.id,data.revision])) {
+    throw new SchoolError(409,'Le quiz ou le niveau a changé. Rouvre le quiz.');
+  }
+  const resultView=schoolQuizResult(items,answers);
+  await schoolChapterOpen(db,account,{id:data.id,stage:'quiz',complete:resultView.score===resultView.total});
+  return {result:resultView};
 }

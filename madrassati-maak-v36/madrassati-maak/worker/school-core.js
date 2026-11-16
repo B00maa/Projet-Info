@@ -1,7 +1,7 @@
 const SCHOOL_PREFIX = '/api/school';
 const SCHOOL_DAY = 86400000;
 const SCHOOL_MINUTE = 60000;
-const SCHOOL_CLOCK = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+const SCHOOL_CLOCK = "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)";
 const SCHOOL_MEMBER_ROLES = ['professeur','eleve','parent'];
 
 class SchoolError extends Error {
@@ -86,7 +86,7 @@ async function schoolAccount(request,env) {
   if (!account && schoolNativeEmail(email)) {
     const administrator = schoolEmail(env.SCHOOL_ADMIN_EMAIL);
     if (email === administrator) {
-      await schoolRun(db,`INSERT OR IGNORE INTO school_accounts(id,email,name,role,user_id)
+      await schoolRun(db,`INSERT IGNORE INTO school_accounts(id,email,name,role,user_id)
         SELECT ?,?,'Administration','administration',? WHERE NOT EXISTS (SELECT 1 FROM school_accounts WHERE role='administration')`,
       [crypto.randomUUID(),email,user]);
     }
@@ -105,9 +105,11 @@ async function schoolAccount(request,env) {
 
 async function schoolClassCreate(db,account,data) {
   schoolRoles(account,'administration');
-  const name = schoolText(data.name,60);
-  schoolRequire(name,'Indique le nom de la classe.');
-  const result = await schoolRun(db,'INSERT OR IGNORE INTO school_classes(id,name) VALUES(?,?)',[crypto.randomUUID(),name]);
+  const level=schoolText(data.name,80),stream=schoolText(data.stream,80);
+  const name=stream?level+' · '+stream:level;
+  schoolRequire(level&&name.length<=160&&(!data.stream||stream),'Indique un niveau et une filière valides.');
+  const result=await schoolRun(db,'INSERT IGNORE INTO school_classes(id,name,grade_label,stream) VALUES(?,?,?,?)',
+    [crypto.randomUUID(),name,level,stream]);
   if (!schoolChanged(result)) throw new SchoolError(409,'Une classe porte déjà ce nom.');
 }
 
@@ -122,7 +124,7 @@ async function schoolAccountClasses(db,role,data) {
   schoolRequire(role!=='eleve'||classes.length===1,'Choisis une classe pour l’élève.');
   schoolRequire(role!=='professeur'||!classes.length||subject,'Indique la matière enseignée.');
   if(classes.length) {
-    const matching=await schoolAll(db,"SELECT id FROM school_classes WHERE id IN (SELECT value FROM json_each(?))",[JSON.stringify(classes)]);
+    const matching=await schoolAll(db,"SELECT id FROM school_classes WHERE id IN (SELECT v.value FROM JSON_TABLE(?, '$[*]' COLUMNS (value VARCHAR(36) PATH '$')) v)",[JSON.stringify(classes)]);
     schoolRequire(matching.length===classes.length,'Une des classes est introuvable.');
   }
   return {classes,subject};
@@ -132,7 +134,7 @@ async function schoolGuardianSelection(db,values,parentId=null) {
   const children=schoolDistinctIds(values,20);
   schoolRequire(parentId||children.length,'Associe au moins un élève à ce parent.');
   const matching=await schoolAll(db,`SELECT id FROM school_accounts
-    WHERE role='eleve' AND id IN (SELECT value FROM json_each(?))
+    WHERE role='eleve' AND id IN (SELECT v.value FROM JSON_TABLE(?, '$[*]' COLUMNS (value VARCHAR(36) PATH '$')) v)
       AND (active=1 OR EXISTS (SELECT 1 FROM school_guardians g WHERE g.parent_id=? AND g.student_id=school_accounts.id))`,
   [JSON.stringify(children),parentId]);
   schoolRequire(matching.length===children.length,'Un des élèves est introuvable.');
@@ -204,22 +206,22 @@ async function schoolAccountEdit(db,account,data) {
     schoolAccountEvent(db,account.id,member.id,'class-changed',`${guard} AND
       NOT EXISTS (SELECT 1 FROM school_enrolments WHERE student_id=? AND class_id=?)`,[...condition,member.id,classes[0]]),
     schoolQuery(db,`INSERT INTO school_enrolments(student_id,class_id) SELECT ?,? WHERE ${guard}
-      ON CONFLICT(student_id) DO UPDATE SET class_id=excluded.class_id`,[member.id,classes[0],...condition]));
+      ON DUPLICATE KEY UPDATE class_id=VALUES(class_id)`,[member.id,classes[0],...condition]));
   if(member.role==='professeur') changes.push(
     schoolQuery(db,`DELETE FROM school_teaching WHERE teacher_id=? AND ${guard}`,[member.id,...condition]),
     schoolQuery(db,`INSERT INTO school_teaching(teacher_id,class_id,subject)
-      SELECT ?,value,? FROM json_each(?) WHERE ${guard}`,[member.id,subject,JSON.stringify(classes),...condition]));
+      SELECT ?,v.value,? FROM JSON_TABLE(?, '$[*]' COLUMNS (value VARCHAR(36) PATH '$')) v WHERE ${guard}`,[member.id,subject,JSON.stringify(classes),...condition]));
   if(member.role==='parent') {
     const children=await schoolGuardianSelection(db,data.childIds,member.id);
     const selected=JSON.stringify(children);
     changes.push(
       schoolAccountEvent(db,account.id,member.id,'parent-linked',`${guard} AND (
         (SELECT COUNT(*) FROM school_guardians WHERE parent_id=?)<>? OR
-        EXISTS (SELECT 1 FROM school_guardians WHERE parent_id=? AND student_id NOT IN (SELECT value FROM json_each(?))))`,
+        EXISTS (SELECT 1 FROM school_guardians WHERE parent_id=? AND student_id NOT IN (SELECT v.value FROM JSON_TABLE(?, '$[*]' COLUMNS (value VARCHAR(36) PATH '$')) v)))`,
       [...condition,member.id,children.length,member.id,selected]),
       schoolQuery(db,`DELETE FROM school_guardians WHERE parent_id=? AND ${guard}`,[member.id,...condition]),
       schoolQuery(db,`INSERT INTO school_guardians(parent_id,student_id)
-        SELECT ?,value FROM json_each(?) WHERE ${guard}`,[member.id,selected,...condition]));
+        SELECT ?,v.value FROM JSON_TABLE(?, '$[*]' COLUMNS (value VARCHAR(36) PATH '$')) v WHERE ${guard}`,[member.id,selected,...condition]));
   }
   const results=await db.batch([
     ...changes,
@@ -288,119 +290,51 @@ async function schoolDirectory(db,account) {
   return {};
 }
 
-async function schoolFamilyOverview(db,children,until) {
-  const ids=JSON.stringify(children.map(child=>child.id));
-  const [rows,homework]=await Promise.all([
-    schoolAll(db,`SELECT a.id,a.name,c.name AS class_name,
-      (SELECT COUNT(*) FROM school_attendance p WHERE p.student_id=a.id AND p.status='absent'
-        AND p.justification_status IS NOT 'accepted') AS absences,
-      EXISTS (SELECT 1 FROM school_fatigue_requests f WHERE f.student_id=a.id AND f.status='pending'
-        AND f.requested_at>${SCHOOL_CLOCK}-?) AS fatigue
-      FROM school_accounts a LEFT JOIN school_enrolments e ON e.student_id=a.id
-      LEFT JOIN school_classes c ON c.id=e.class_id WHERE a.id IN (SELECT value FROM json_each(?))
-      ORDER BY a.name,a.id`,[SCHOOL_FATIGUE_REPLY_WINDOW,ids]),
-    schoolDueHomework(db,children,until,3)
-  ]);
-  return rows.map(child=>({...child,homework:homework.filter(row=>row.student_id===child.id)}));
-}
-
 async function schoolState(db,account,url) {
-  const week = schoolWeek(url.searchParams.get('week'));
-  const requestedView=url.searchParams.get('view');
-  const view=requestedView||({administration:'dashboard',professeur:'dashboard',eleve:'aujourdhui',parent:'famille'})[account.role];
-  const children = await schoolChildren(db,account);
-  const child = schoolChild(children,url.searchParams.get('child'));
-  const scope = schoolSessionScope(account,child);
-  const [directory,period,sessions,assignments,notices,fatigue,teacherFatigue] = await Promise.all([
-    schoolDirectory(db,account), schoolPeriod(db),
-    schoolSessions(db,scope,'s.date BETWEEN ? AND ?',[week.start,week.end]),
-    child ? schoolSessions(db,scope,'s.due_date BETWEEN ? AND ?',[week.start,week.end]) : [],
-    schoolNotices(db,account),schoolFatigueHistory(db,child),
+  const week=schoolWeek(url.searchParams.get('week'));
+  const view=url.searchParams.get('view')||({administration:'dashboard',professeur:'dashboard',eleve:'aujourdhui',parent:'famille'})[account.role];
+  const children=await schoolChildren(db,account);
+  const child=schoolChild(children,url.searchParams.get('child'));
+  const [directory,period,notices,fatigue,teacherFatigue]=await Promise.all([
+    schoolDirectory(db,account),schoolPeriod(db),schoolNotices(db,account),schoolFatigueHistory(db,child),
     account.role==='professeur'?schoolTeacherFatigue(db,account):[]
   ]);
-  const state = {account,view,week,children,child,directory,now:Date.now(),period:schoolPeriodView(period),
-    sessions:sessions.map(schoolSessionView),notices,fatigue,teacherFatigue};
-  if (account.role === 'eleve' && view==='rattrapage') {
-    const [previous,progress,missed]=await Promise.all([
-      schoolSessions(db,scope,'s.cancelled_at IS NULL AND s.date<=?',[schoolToday()],true),
-      schoolAll(db,'SELECT session_id,step FROM school_catchup WHERE student_id=?',[account.id]),
-      schoolAll(db,"SELECT session_id FROM school_attendance WHERE student_id=? AND status='absent'",[account.id])
-    ]);
-    const steps = new Map(progress.map(row => [row.session_id,row.step]));
-    const absences=new Set(missed.map(row=>row.session_id));
-    state.catchup = previous.filter(schoolSessionEnded).map(session =>
-      ({...schoolSessionView(session),step:steps.get(session.id)||0,missed:absences.has(session.id)}));
+  const state={account,view,week,children,child,directory,now:Date.now(),period:schoolPeriodView(period),
+    sessions:[],notices,fatigue,teacherFatigue};
+  const pending=[];
+  const attach=(key,value)=>pending.push(Promise.resolve(value).then(result=>{state[key]=result;}));
+  const home=['aujourdhui','famille'].includes(view);
+  if(home||view==='cours'||view==='progression'||view==='revoir') {
+    attach('courses',schoolCourses(db,account,child));
+    if(child)attach('learning',schoolLessonOverview(db,account,child));
   }
-  if (child) {
-    state.assignments = assignments.map(schoolSessionView);
-    state.grades = await schoolPublishedGrades(db,child.id,week,account.role==='parent');
-    if (account.role === 'parent') {
-      const changes = await schoolSessions(db,scope,'s.revision>1 AND s.updated_at>=? AND s.updated_at<?',[week.from,week.until]);
-      state.changes = changes.map(schoolSessionView);
-    }
+  if(child&&(home||view==='notes'||view==='semaine')) {
+    attach('gradeReport',schoolPublishedGrades(db,child.id,week,false));
   }
-  const canSeeHomework=['eleve','parent','professeur'].includes(account.role);
-  const extra=[];
-  const attach=(key,value)=>extra.push(Promise.resolve(value).then(result=>{state[key]=result;}));
-  if(view==='rattrapage'&&account.role==='parent') {
-    attach('catchup',schoolSessions(db,scope,'s.date<=?',[schoolToday()],true)
-      .then(rows=>rows.filter(schoolSessionEnded).map(schoolSessionView)));
+  if(child&&(home||view==='devoirs'||view==='semaine'))attach('homework',schoolHomeworkList(db,account,child));
+  if(account.role==='professeur'&&['dashboard','devoirs'].includes(view)) {
+    attach('homework',schoolHomeworkList(db,account,null));
   }
-  if(view==='notifications') {
-    attach('notifications',schoolNotifications(db,account,children).then(rows=>{
-      state.unreadNotifications=rows.filter(row=>row.read_at==null).length;
-      return rows;
-    }));
-  } else attach('unreadNotifications',schoolUnreadNotifications(db,account,children));
-  if((view==='notes'||view==='semaine')&&child) {
-    attach('gradeReport',account.role==='eleve'?state.grades:schoolPublishedGrades(db,child.id,week,false));
-  }
-  if (account.role==='professeur'&&(!requestedView||view==='notes')) attach('evaluations',schoolTeacherEvaluations(db,account,period));
-  if (account.role==='administration'&&(!requestedView||view==='notes')) attach('gradeProgress',schoolGradeProgress(db,period));
-  if (account.role==='administration'&&view==='historique') attach('accountHistory',schoolAccountHistory(db,url.searchParams.get('page')));
-  if (view==='evaluations') attach('assessments',schoolAssessments(db,account,child));
-  if (view==='absences'||(view==='semaine'&&account.role==='parent')) {
-    attach('absences',schoolAbsences(db,account,child,account.role==='parent'&&view==='absences'));
-  }
-  if (view==='devoirs'&&canSeeHomework) attach('homework',schoolHomeworkList(db,account,child));
-  if (account.role==='eleve'&&view==='aujourdhui') {
-    const today=schoolToday();
-    const until=schoolDay(Date.parse(today)+7*SCHOOL_DAY);
-    state.today=today;
-    attach('upcoming',schoolUpcomingSessions(db,scope,4));
-    attach('dueHomework',schoolDueHomework(db,children,until,6));
-    attach('homeSubjects',schoolSessionSubjects(db,scope));
-    attach('homeClass',schoolFirst(db,'SELECT c.name FROM school_enrolments e JOIN school_classes c ON c.id=e.class_id WHERE e.student_id=?',
-      [account.id]).then(row=>row?.name??null));
-    attach('missedSessions',schoolSessions(db,scope,`s.cancelled_at IS NULL AND s.date<=?
-      AND EXISTS (SELECT 1 FROM school_attendance p WHERE p.session_id=s.id AND p.student_id=? AND p.status='absent')
-      AND NOT EXISTS (SELECT 1 FROM school_catchup c WHERE c.session_id=s.id AND c.student_id=? AND c.step>=3)`,
-    [today,account.id,account.id],true,12).then(rows=>rows.filter(schoolSessionEnded).slice(0,6).map(schoolSessionView)));
-  }
-  if (account.role==='parent'&&view==='famille') {
-    const today=schoolToday();
-    attach('family',schoolFamilyOverview(db,children,schoolDay(Date.parse(today)+7*SCHOOL_DAY)));
-    if(child) {
-      attach('upcoming',schoolUpcomingSessions(db,scope,3));
-      attach('homeworkCounts',schoolHomeworkCounts(db,account,child));
-    }
-  }
-  if (account.role==='professeur'&&view==='dashboard') {
-    attach('upcoming',schoolUpcomingSessions(db,scope,4));
-    attach('homeworkToCorrect',schoolHomeworkList(db,account,null).then(rows=>
-      rows.filter(row=>row.submitted>row.corrected).length));
-  }
-  if (view==='cours') attach('courses',schoolSessions(db,scope,'1',[],true).then(rows=>rows.map(schoolSessionView)));
-  if (view==='bibliotheque') {
+  if(view==='evaluations'||home)attach('assessments',schoolAssessmentCards(db,account,child));
+  if(view==='notes'&&account.role==='professeur') attach('evaluations',schoolTeacherEvaluations(db,account,period));
+  if(view==='notes'&&account.role==='administration')attach('gradeProgress',schoolGradeProgress(db,period));
+  if(view==='historique'&&account.role==='administration')attach('accountHistory',schoolAccountHistory(db,url.searchParams.get('page')));
+  if(view==='notifications')attach('notifications',schoolNotifications(db,account,children).then(rows=>{
+    state.unreadNotifications=rows.filter(row=>row.read_at==null).length;
+    return rows;
+  }));
+  else attach('unreadNotifications',schoolUnreadNotifications(db,account,children));
+  if(view==='bibliotheque') {
     attach('resources',schoolResources(db,account,child).then(rows=>rows.map(schoolResourceView)));
-    attach('supports',schoolSessions(db,scope,'s.file_key IS NOT NULL OR s.video_url IS NOT NULL',[],true).then(rows=>rows.map(schoolSessionView)));
+    attach('supports',schoolSessions(db,schoolSessionScope(account,child),
+      's.file_key IS NOT NULL OR s.video_url IS NOT NULL',[],true).then(rows=>rows.map(schoolSessionView)));
   }
-  if (view==='messages') {
+  if(view==='messages') {
     attach('contacts',schoolContacts(db,account));
     attach('messages',schoolMessages(db,account));
   }
-  if (view==='annonces') attach('announcements',schoolAnnouncements(db,account));
-  await Promise.all(extra);
+  if(view==='annonces')attach('announcements',schoolAnnouncements(db,account));
+  await Promise.all(pending);
   return state;
 }
 
@@ -408,13 +342,11 @@ async function schoolLifeRead(env,account,route,url) {
   const db=env.DB;
   const params=url.searchParams;
   if(route==='/quiz/results')return json(await schoolQuizResults(db,account,params.get('session')));
-  if(route==='/attendance') return json(await schoolAttendanceRoster(db,account,params.get('session')));
-  if(route==='/justification/file') {
-    const row=await schoolJustificationRow(db,account,params.get('session'),params.get('student'));
-    return schoolDownload(env,row);
-  }
   const child=schoolChild(await schoolChildren(db,account),params.get('child'));
   if(route==='/session')return json({session:schoolSessionView(await schoolSessionDetails(db,account,child,params.get('session')))});
+  if(route==='/chapter/progress')return json(await schoolChapterRoster(db,account,params.get('chapter')));
+  if(route==='/assessment/detail')return json(await schoolAssessmentDetail(db,account,child,params.get('id')));
+  if(route==='/assessment/file')return schoolAssessmentDownload(env,account,child,params);
   if(route==='/grade')return json(await schoolPublishedGradeDetail(db,account,child,params.get('id')));
   if(route==='/quiz')return json(await schoolQuiz(db,account,params.get('session')));
   if(route==='/resource/file') {
@@ -430,7 +362,7 @@ async function schoolLifeRead(env,account,route,url) {
 
 async function schoolLifeWrite(request,env,account,route) {
   const db=env.DB;
-  if(route==='/justification') throw new SchoolError(410,'Remets le justificatif papier à l’administration.');
+  if(route==='/assessment/submission')return json(await schoolAssessmentSubmission(env,account,request));
   if(route==='/homework/submit') await schoolHomeworkSubmit(env,account,request);
   else if(route==='/resource') await schoolResourceSave(env,account,request);
   else {
@@ -444,10 +376,12 @@ async function schoolLifeWrite(request,env,account,route) {
       case '/accounts/code': return json({credential:await schoolResetAccess(db,account,data)});
       case '/accounts/import/preview': return json(await schoolImportStudents(db,account,data,false));
       case '/accounts/import': return json(await schoolImportStudents(db,account,data,true));
-      case '/catchup': await schoolCatchup(db,account,data); break;
-      case '/session/series': return json(await schoolSeriesPreview(db,account,data));
-      case '/session/cancellation': await schoolSessionCancellation(db,account,data); break;
       case '/notifications/read': return json(await schoolReadNotification(db,account,data));
+      case '/chapter/open': return json(await schoolChapterOpen(db,account,data));
+      case '/chapter/help': await schoolChapterHelp(db,account,data); break;
+      case '/assessment/start': return json(await schoolAssessmentStart(db,account,data));
+      case '/assessment/extend': await schoolAssessmentExtend(db,account,data); break;
+      case '/assessment/correct': await schoolAssessmentCorrect(db,account,data); break;
       case '/quiz': return json(await schoolQuizSave(db,account,data));
       case '/quiz/submit': return json(await schoolQuizSubmit(db,account,data));
       case '/period': await schoolPeriodSave(db,account,data); break;
@@ -457,9 +391,6 @@ async function schoolLifeWrite(request,env,account,route) {
       case '/assessment/remove': await schoolAssessmentRemove(db,account,data); break;
       case '/evaluation': return json({id:await schoolEvaluationSave(db,account,data)});
       case '/evaluation/draft': return json(await schoolEvaluationDraftSave(db,account,data));
-      case '/attendance': await schoolAttendanceSave(env,account,data); break;
-      case '/attendance/paper': await schoolPaperReceived(db,account,data); break;
-      case '/justification/review': await schoolJustificationReview(db,account,data); break;
       case '/fatigue': await schoolFatigueRequest(db,account,data); break;
       case '/fatigue/decision': await schoolFatigueDecide(db,account,data); break;
       case '/fatigue/stop': await schoolFatigueStop(db,account,data); break;
@@ -507,12 +438,10 @@ async function handleSchool(request,env,url) {
         schoolRoles(account,'professeur','eleve');
         return json({status:coachProviders(env,account.role==='professeur',true).length?'ready':'needs-key'});
       }
-      if (route === '/slots') return json({slots:await schoolAvailableSlots(db,account,url.searchParams)});
-      if (route === '/pack') return await schoolOfflinePack(env,account,url);
       if (route.startsWith('/file/')) return await schoolSessionFile(env,account,route.slice(6),url,request);
       return await schoolLifeRead(env,account,route,url);
     }
-    if (route === '/session') return json({id:await schoolSessionSave(env,account,request)});
+    if (route === '/chapter') return json({id:await schoolChapterSave(env,account,request)});
     if (route === '/coach/course') return await schoolEditTeacherCourse(request,env,account);
     if (route === '/coach') {
       schoolRoles(account,'professeur','eleve');
@@ -521,7 +450,7 @@ async function handleSchool(request,env,url) {
     return await schoolLifeWrite(request,env,account,route);
   } catch (error) {
     if (error instanceof SchoolError) return json({message:error.message,code:error.code},error.status);
-    console.error('School request failed',url.pathname.split('/').slice(0,4).join('/'));
+    console.error('School request failed',url.pathname.split('/').slice(0,4).join('/'),error.code||error.name);
     return json({message:'L’action a échoué. Actualise la page et réessaie.'},500);
   }
 }
