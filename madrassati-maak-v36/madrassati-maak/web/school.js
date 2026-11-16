@@ -455,7 +455,7 @@ function schSessionRow(item,edit=false,showTeacher=true,showQuiz=false) {
     ${item.series_id?'<span class="tag soft">Série hebdomadaire</span>':''}
     ${cancelled?'<span class="tag orange">Séance annulée</span>':''}</div>
     <div class="school-actions"><button type="button" class="btn secondary small" data-school-action="view-session" data-id="${item.id}">Voir la séance</button>
-    ${showQuiz?schQuizButton(item):''}
+    ${showQuiz?schQuizActions(item):''}
     ${canEdit&&!future?`<button type="button" class="btn secondary small" data-school-action="attendance" data-id="${item.id}">Faire l’appel</button>`:''}
     ${canEdit?`<button type="button" class="btn secondary small" data-school-action="edit-session" data-id="${item.id}">Modifier la séance</button>`:''}
     ${edit&&admin&&future?`<button type="button" class="btn secondary small" data-school-action="session-cancellation" data-id="${item.id}">
@@ -487,7 +487,7 @@ function schSessionContent(item,previewUrl='',childId=schoolUI.data?.child?.id) 
   const meeting=cancelled?'':schSafeLink(item.meeting_url);
   const calm=schoolUI.data?.account.role==='eleve'&&schFatigueCurrent()?.status==='approved';
   const work=calm&&item.short_exercise?item.short_exercise:item.exercise;
-  const quiz=schQuizButton(item);
+  const quiz=schQuizActions(item);
   return `<div class="school-stack">
     ${schSessionMeta(item)}
     ${cancelled?`<section class="school-callout school-cancelled-note"><h3>Séance annulée</h3>
@@ -502,7 +502,7 @@ function schSessionContent(item,previewUrl='',childId=schoolUI.data?.child?.id) 
       <p data-no-i18n="true" dir="auto">${schEsc(work)}</p>
       <p class="school-small school-muted"><span>Date de remise</span> · ${schValue(schDate(item.due_date||item.date))}</p></section>`:''}
     ${meeting?`<div><a class="btn primary" href="${schEsc(meeting)}" target="_blank" rel="noopener noreferrer">Rejoindre la séance</a></div>`:''}
-    ${quiz?`<div>${quiz}</div>`:''}</div>`;
+    ${quiz?`<div class="school-actions">${quiz}</div>`:''}</div>`;
 }
 
 function schPlanningPage() {
