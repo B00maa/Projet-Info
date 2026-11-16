@@ -1,6 +1,6 @@
 # Madrassati Maâk
 
-Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 42 ainsi que ses ressources et ses migrations SQL.
+Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 43 ainsi que ses ressources et ses migrations SQL.
 
 ## Lancer le projet
 
@@ -23,7 +23,7 @@ La commande `npm run build` assemble le serveur et les ressources web dans `dist
 
 ## Espace scolaire connecté
 
-La route `/ecole` utilise un environnement Workers avec une base Cloudflare D1 liée au nom `DB` et un espace de stockage Cloudflare R2 lié au nom `BUCKET`. Pour une nouvelle base, appliquez `0000_school.sql`, `0001_school_life.sql`, `0002_school_directory.sql`, `0003_school_workflows.sql`, `0004_teacher_course_library.sql`, puis `0005_school_schedule_and_revision.sql` dans `drizzle/`.
+La route `/ecole` utilise un environnement Workers avec une base Cloudflare D1 liée au nom `DB` et un espace de stockage Cloudflare R2 lié au nom `BUCKET`. Pour une nouvelle base, appliquez `0000_school.sql`, `0001_school_life.sql`, `0002_school_directory.sql`, `0003_school_workflows.sql`, `0004_teacher_course_library.sql`, `0005_school_schedule_and_revision.sql`, puis `0006_school_session_cancellation.sql` dans `drizzle/`.
 
 Les noms des variables d’environnement sont indiqués dans `.env.example`. Configurez les valeurs dans les secrets de l’hébergeur. Sur ChatGPT Sites, elles se trouvent dans **Paramètres → Secrets**.
 
@@ -40,9 +40,11 @@ Les nouveaux comptes choisissent leur mot de passe à la première connexion. L�
 
 Dans **Cours en préparation**, rouvrez, renommez ou dupliquez un brouillon et modifiez ou régénérez un chapitre précis. Dans **Saisie des notes**, exportez le tableau de l’évaluation, remplissez la colonne des notes et importez le fichier pour contrôler les valeurs et appliquer le tableau au brouillon.
 
-La page **Aujourd’hui** réunit les prochains cours, les devoirs et le rattrapage de l’élève. La **Vue famille** présente les démarches et les échéances de chaque enfant associé.
+Le **Tableau de bord** de l’élève présente les matières de sa classe, les devoirs à rendre, les prochaines séances et les séances à rattraper. Dans **Suivi de mon enfant**, le parent choisit l’élève suivi et retrouve ses devoirs, son planning, son assiduité et ses résultats. Les deux espaces reprennent le menu latéral de la maquette.
 
 Dans **Planning des séances**, l’administration peut répéter une séance chaque semaine jusqu’à une date de fin. **Vérifier les créneaux** affiche les dates et les conflits avec la classe ou le professeur avant la publication. En modifiant une séance à venir, **Appliquer l’horaire aux séances suivantes** décale les dates et met à jour l’heure et la durée des prochaines séances de cette série.
+
+Pour une séance à venir, l’administration peut cliquer sur **Annuler la séance** et renseigner un motif. Le créneau est libéré et les comptes concernés reçoivent une notification avec un lien vers la séance et son motif. **Rétablir la séance** vérifie la disponibilité du créneau et envoie une nouvelle notification.
 
 Le bouton **Notifications** affiche les changements d’horaire, les devoirs corrigés et les notes publiées selon le profil. Chaque notification ouvre le détail de la séance, du devoir ou de l’évaluation. Dans **Résultats**, l’élève et le parent peuvent filtrer les notes publiées par matière et dates, ouvrir l’évaluation ou télécharger le relevé PDF.
 
