@@ -15,7 +15,6 @@ function schTeacherDashboard() {
   return `<div class="school-title school-teacher-heading"><div><h1>${schValue(account.name)}</h1>
     ${subjects.length?`<p class="school-muted">${schValue(subjects.join(' · '))}</p>`:''}</div>
     <div class="school-actions">
-      <a class="btn secondary" href="#messages">${siteIcon('mail','sm')} Messagerie</a>
       <a class="btn secondary" href="#coach">${siteIcon('robot','sm')} Coach pédagogique</a>
       <button type="button" class="btn primary" data-school-action="edit-session" data-kind="course" ${disabled}>
         ${siteIcon('plus','sm')} Ajouter un cours</button>

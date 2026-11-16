@@ -1,6 +1,10 @@
 'use strict';
 
 const SCHOOL_LIFE_AR={
+  'Profils scolaires':'الحسابات المدرسية',
+  'Connectez-vous avec les accès remis par votre établissement.':'سجّلوا الدخول بالبيانات التي سلّمتها لكم مؤسستكم.',
+  'Afficher le mot de passe':'إظهار كلمة المرور','Masquer le mot de passe':'إخفاء كلمة المرور',
+  'notification non lue':'إشعار غير مقروء','notifications non lues':'إشعارات غير مقروءة',
   'Navigation de l’élève':'التنقل في فضاء التلميذ','Navigation du parent':'التنقل في فضاء ولي الأمر',
   'Mon apprentissage':'تعلّمي','Mon quotidien':'يوميّاتي','Le suivi scolaire':'المتابعة الدراسية',
   'Échanges et ressources':'التواصل والموارد','Suivi de mon enfant':'متابعة طفلي',
