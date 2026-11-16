@@ -34,9 +34,14 @@ async function schoolSessionDetails(db,account,child,id) {
 async function schoolUpcomingSessions(db,scope,limit) {
   const [today,time]=schoolMoroccoClock.format(Date.now()).replace(' ','T').split('T');
   const [hour,minute]=time.split(':').map(Number);
-  const rows=await schoolSessions(db,scope,'s.date>? OR (s.date=? AND s.start_minute+s.duration>?)',
+  const rows=await schoolSessions(db,scope,'s.cancelled_at IS NULL AND (s.date>? OR (s.date=? AND s.start_minute+s.duration>?))',
     [today,today,hour*60+minute],false,limit);
   return rows.map(schoolSessionView);
+}
+
+function schoolSessionSubjects(db,scope) {
+  return schoolAll(db,`SELECT s.subject,COUNT(*) AS total FROM school_sessions s
+    WHERE (${scope.where}) GROUP BY s.subject ORDER BY s.subject`,scope.args);
 }
 
 function schoolSessionEnded(session) {
@@ -89,7 +94,7 @@ async function schoolAvailableSlots(db,account,params) {
     }
   }
   const busy = await schoolAll(db,`SELECT date,start_minute,duration FROM school_sessions
-    WHERE date BETWEEN ? AND ? AND (teacher_id=? OR class_id=?) AND id<>?`,
+    WHERE cancelled_at IS NULL AND date BETWEEN ? AND ? AND (teacher_id=? OR class_id=?) AND id<>?`,
     [schoolDay(from),schoolDay(from+13*SCHOOL_DAY),teaching.teacher_id,teaching.class_id,excluded]);
   const slots = [];
   const now = Date.now();
@@ -141,6 +146,7 @@ async function schoolSessionSave(env,account,request) {
   if (existing && existing.revision !== Number(values.revision)) {
     throw new SchoolError(409,'La séance a changé. Rouvre-la avant de la modifier.');
   }
+  if(existing?.cancelled_at!=null)throw new SchoolError(409,'Rétablis la séance avant de la modifier.');
   const teaching = await schoolTeaching(db,account,values.teacher,values.class);
   const title = schoolText(values.title,120);
   const description = schoolText(values.description,TEACHER_LESSON_PUBLISH_LIMIT);
@@ -171,7 +177,7 @@ async function schoolSessionSave(env,account,request) {
   const fields = [teaching.class_id,teaching.teacher_id,teaching.subject,title,date,start,duration,
     description,exercise,shortExercise,due,meeting,video,attachment?.key??null,attachment?.name??null,
     attachment?.type??null,attachment?.size??null,Date.now()];
-  const available = `NOT EXISTS (SELECT 1 FROM school_sessions AS clash WHERE clash.id<>? AND clash.date=?
+  const available = `NOT EXISTS (SELECT 1 FROM school_sessions AS clash WHERE clash.id<>? AND clash.cancelled_at IS NULL AND clash.date=?
     AND (clash.class_id=? OR clash.teacher_id=?)
     AND clash.start_minute<? AND clash.start_minute+clash.duration>?)`;
   const availability = [id,date,teaching.class_id,teaching.teacher_id,start+duration,start];
@@ -196,7 +202,7 @@ async function schoolSessionSave(env,account,request) {
       await schoolRun(db,`UPDATE school_sessions SET class_id=?,teacher_id=?,subject=?,title=?,date=?,
         start_minute=?,duration=?,description=?,exercise=?,short_exercise=?,due_date=?,meeting_url=?,video_url=?,
         file_key=?,file_name=?,file_type=?,file_size=?,updated_at=?,revision=revision+1
-        WHERE id=? AND revision=? AND ${available} AND ${currentTeaching} AND ${retained}`,
+        WHERE id=? AND revision=? AND cancelled_at IS NULL AND ${available} AND ${currentTeaching} AND ${retained}`,
         [...fields,id,existing.revision,...availability,...assignment,Number(movesClass),Number(movesClass||dropsHomework)]) :
       await schoolRun(db,`INSERT INTO school_sessions(id,class_id,teacher_id,subject,title,date,start_minute,
         duration,description,exercise,short_exercise,due_date,meeting_url,video_url,file_key,file_name,file_type,file_size,updated_at)
@@ -222,11 +228,32 @@ async function schoolSessionSave(env,account,request) {
   }
 }
 
+async function schoolSessionCancellation(db,account,data) {
+  schoolRoles(account,'administration');
+  schoolRequire(schoolId(data.id)&&Number.isInteger(data.revision)&&typeof data.cancel==='boolean','Séance invalide.');
+  const reason=data.cancel?schoolText(data.reason,400):'';
+  schoolRequire(!data.cancel||reason,'Indique un motif de 400 caractères maximum.');
+  const session=await schoolSessionDetails(db,account,null,data.id);
+  if(session.revision!==data.revision)throw new SchoolError(409,'La séance a changé. Rouvre-la avant de la modifier.');
+  schoolRequire(data.cancel?(session.cancelled_at==null):(session.cancelled_at!=null),'L’état de la séance a déjà changé.');
+  const now=Date.now();
+  schoolRequire(schoolSessionInstant(session.date,session.start_minute)>now,'Seule une séance à venir peut être annulée ou rétablie.');
+  const result=await schoolRun(db,`UPDATE school_sessions AS s SET cancelled_at=?,cancel_reason=?,updated_at=?,revision=revision+1
+    WHERE s.id=? AND s.revision=? AND (?=1 OR (
+      NOT EXISTS (SELECT 1 FROM school_sessions c WHERE c.id<>s.id AND c.cancelled_at IS NULL AND c.date=s.date
+        AND (c.class_id=s.class_id OR c.teacher_id=s.teacher_id)
+        AND c.start_minute<s.start_minute+s.duration AND c.start_minute+c.duration>s.start_minute)
+      AND EXISTS (SELECT 1 FROM school_teaching t JOIN school_accounts a ON a.id=t.teacher_id AND a.active=1
+        WHERE t.teacher_id=s.teacher_id AND t.class_id=s.class_id AND t.subject=s.subject)))`,
+    [data.cancel?now:null,reason,now,session.id,session.revision,Number(data.cancel)]);
+  if(!schoolChanged(result))throw new SchoolError(409,'Le créneau est occupé ou la séance a changé. Actualise le planning.');
+}
+
 async function schoolCatchup(db,account,data) {
   schoolRoles(account,'eleve');
   schoolRequire(schoolId(data.id) && Number.isInteger(data.step) && data.step>=1 && data.step<=3,'Étape invalide.');
   const scope = schoolSessionScope(account,account);
-  const [session] = await schoolSessions(db,scope,'s.id=?',[data.id]);
+  const [session] = await schoolSessions(db,scope,'s.id=? AND s.cancelled_at IS NULL',[data.id]);
   if (!session || !schoolSessionEnded(session)) throw new SchoolError(404,'Cette séance ne peut pas encore être rattrapée.');
   const result = data.step===1 ?
     await schoolRun(db,'INSERT OR IGNORE INTO school_catchup(student_id,session_id,step) VALUES(?,?,1)',[account.id,data.id]) :
@@ -288,6 +315,7 @@ async function schoolOfflinePack(env,account,url) {
     }
     const video = session.video_url ? `<p><a href="${schoolEscape(session.video_url)}" rel="noreferrer">Vidéo en ligne</a></p>` : '';
     html.push(`<section><h2>${schoolEscape(session.title)}</h2><p>${schoolEscape(session.subject)} · ${schoolEscape(session.date)}</p>
+      ${session.cancelled_at!=null?`<p><strong>Séance annulée</strong> · ${schoolEscape(session.cancel_reason)}</p>`:''}
       ${session.description ? `<h3>Consigne</h3><p>${schoolEscape(session.description)}</p>` : ''}
       ${support}${video}
       ${session.exercise ? `<h3>Exercice · ${schoolEscape(session.due_date)}</h3><p>${schoolEscape(session.exercise)}</p>` : ''}</section>`);

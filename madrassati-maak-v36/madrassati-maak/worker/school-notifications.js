@@ -4,13 +4,13 @@ const SCHOOL_NOTIFICATION_EVENTS=`children AS (
   SELECT json_extract(value,'$.id') AS id,json_extract(value,'$.name') AS name FROM json_each(?)
 ), settings AS (SELECT ? AS account,? AS role,? AS since,? AS now),
 events AS (
-  SELECT 'planning/'||s.id||'/'||s.schedule_revision AS event_key,'planning' AS kind,
+  SELECT 'planning/'||s.id||'/'||s.schedule_revision AS event_key,s.schedule_event AS kind,
     s.id AS target,s.title,s.schedule_changed_at AS event_at,s.date,s.start_minute,NULL AS child_id,NULL AS child_name
   FROM school_sessions s CROSS JOIN settings k
   WHERE s.schedule_changed_at>=k.since AND (k.role='administration' OR (k.role='professeur' AND s.teacher_id=k.account AND EXISTS (
     SELECT 1 FROM school_teaching t WHERE t.teacher_id=s.teacher_id AND t.class_id=s.class_id)))
   UNION ALL
-  SELECT 'planning/'||s.id||'/'||s.schedule_revision||'/'||c.id,'planning',s.id,s.title,s.schedule_changed_at,s.date,s.start_minute,c.id,c.name
+  SELECT 'planning/'||s.id||'/'||s.schedule_revision||'/'||c.id,s.schedule_event,s.id,s.title,s.schedule_changed_at,s.date,s.start_minute,c.id,c.name
   FROM children c JOIN school_enrolments e ON e.student_id=c.id JOIN school_sessions s ON s.class_id=e.class_id
   CROSS JOIN settings k WHERE s.schedule_changed_at>=k.since
   UNION ALL

@@ -10,7 +10,7 @@ const SCHOOL_SERIES_CTE = `planned AS MATERIALIZED (
 )`;
 
 const SCHOOL_SERIES_CONFLICTS = `
-  SELECT p.id FROM planned p JOIN school_sessions s ON s.date=p.date
+  SELECT p.id FROM planned p JOIN school_sessions s ON s.date=p.date AND s.cancelled_at IS NULL
     AND (s.class_id=p.class_id OR s.teacher_id=p.teacher_id)
     AND s.start_minute<p.start+p.duration AND s.start_minute+s.duration>p.start
     WHERE NOT EXISTS (SELECT 1 FROM planned x WHERE x.id=s.id)
@@ -47,10 +47,10 @@ async function schoolSeriesPlan(db,account,values,existing,teaching) {
     schoolRequire(rows.every(row=>schoolDate(row.date)&&(!row.due||schoolDate(row.due))),'Vérifie les dates et les horaires de la série.');
     return {rows,seriesId:rows[0].id};
   }
-  schoolRequire(following&&!repeatUntil&&existing.series_id&&schoolSessionInstant(existing.date,existing.start_minute)>=now,
+  schoolRequire(following&&!repeatUntil&&existing.series_id&&existing.cancelled_at==null&&schoolSessionInstant(existing.date,existing.start_minute)>=now,
     'Choisis une séance à venir de cette série.');
   const remaining=await schoolAll(db,`SELECT id,revision,class_id,teacher_id,subject,date,start_minute,duration,due_date
-    FROM school_sessions WHERE series_id=? AND series_index>? AND date>=? ORDER BY series_index`,
+    FROM school_sessions WHERE series_id=? AND series_index>? AND date>=? AND cancelled_at IS NULL ORDER BY series_index`,
   [existing.series_id,existing.series_index,schoolToday()]);
   const days=(Date.parse(date)-Date.parse(existing.date))/SCHOOL_DAY;
   const rows=[{...selected,id:existing.id,revision:existing.revision}];
