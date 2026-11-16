@@ -23,7 +23,7 @@ for (const path of (await readdir(web,{recursive:true})).sort()) {
 if (!assets['/index.html']) throw new Error('Missing web/index.html');
 const workerSources=[
   'school-core','school-access','school-planning','school-grades','school-attendance',
-  'school-work','school-communication','teacher-course','index'
+  'school-work','school-communication','school-series','school-notifications','school-quizzes','teacher-course','index'
 ].map(name=>new URL('../worker/'+name+'.js',import.meta.url));
 const sharedSources=['school-zip.js','teacher-lesson.js','lesson-calculations.js'].map(name=>new URL(name,web));
 const worker=(await Promise.all([...sharedSources,...workerSources].map(file=>readFile(file,'utf8')))).join('\n');
