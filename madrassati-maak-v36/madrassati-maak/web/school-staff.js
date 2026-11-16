@@ -73,7 +73,7 @@ function schAccountRows() {
       directory.guardians.filter(row=>row.parent_id===account.id).map(row=>names.get(row.student_id)).filter(Boolean).join(', ');
     const login=account.login||account.email;
     return `<li class="admin-directory-row">
-      <div class="admin-identity">${schStaffAvatar(account.name)}<div><strong>${schValue(account.name)}</strong>
+      <div class="admin-identity">${schWorkspaceAvatar(account.name)}<div><strong>${schValue(account.name)}</strong>
         ${login?`<small><bdi dir="ltr" data-no-i18n="true">${schEsc(login)}</bdi></small>`:''}</div></div>
       <div class="admin-directory-meta"><span class="tag blue">${SCHOOL_ROLE_NAMES[account.role]}</span>
         <span>${membership?schValue(membership):'Sans affectation'}</span></div>
