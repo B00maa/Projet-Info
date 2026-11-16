@@ -1,6 +1,6 @@
 # Madrassati Maâk
 
-Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 44 ainsi que ses ressources et ses migrations SQL.
+Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 45 ainsi que ses ressources et ses migrations SQL.
 
 ## Lancer le projet
 
@@ -48,7 +48,7 @@ Pour une séance à venir, l’administration peut cliquer sur **Annuler la séa
 
 Le bouton **Notifications** affiche les changements d’horaire, les devoirs corrigés et les notes publiées selon le profil. Chaque notification ouvre le détail de la séance, du devoir ou de l’évaluation. Dans **Résultats**, l’élève et le parent peuvent filtrer les notes publiées par matière et dates, ouvrir l’évaluation ou télécharger le relevé PDF.
 
-Dans **Mes cours**, le professeur ouvre une matière et ajoute jusqu’à huit questions au quiz d’un cours. Il renseigne les choix, la bonne réponse et son explication. L’élève peut faire le quiz, consulter son corrigé après l’envoi et refaire une tentative.
+Dans **Mes cours**, le professeur ouvre une matière et ajoute jusqu’à huit questions au quiz d’un cours. Il renseigne les choix, la bonne réponse et son explication. L’élève peut faire le quiz, consulter son corrigé après l’envoi et refaire une tentative. **Résultats du quiz** affiche, pour la version actuelle, les élèves qui ont répondu, leur dernier score et le nombre de bonnes réponses par question.
 
 Les données du site hébergé et les valeurs de ses secrets sont absentes de l’archive. La configuration conserve les noms de liaison `DB` et `BUCKET` pour un nouveau projet.
 
