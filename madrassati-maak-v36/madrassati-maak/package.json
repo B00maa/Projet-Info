@@ -4,6 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-worker.mjs",
-    "dev": "node scripts/preview-worker.mjs"
+    "dev": "npm run build && node server/start.mjs",
+    "start": "node server/start.mjs",
+    "db:init": "node server/migrate.mjs",
+    "test": "npm run build && node --test server/school.test.mjs"
+  },
+  "dependencies": {
+    "mysql2": "3.24.6"
   }
 }
