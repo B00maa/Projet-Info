@@ -19,7 +19,7 @@ function schAdminCanSchedule(directory) {
 
 function schAdminSessionNeedsTeacher(item,directory,now) {
   const starts=item.date+'T'+schClock(item.start_minute);
-  return starts>now&&(
+  return item.cancelled_at==null&&starts>now&&(
     !directory.accounts.some(account=>account.id===item.teacher_id&&account.active)||
     !directory.teaching.some(assignment=>assignment.teacher_id===item.teacher_id&&assignment.class_id===item.class_id));
 }

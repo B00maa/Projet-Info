@@ -1,6 +1,7 @@
 'use strict';
 
-const SCHOOL_NOTIFICATION_LABELS={planning:'Horaire modifié',devoir:'Devoir corrigé',note:'Note publiée'};
+const SCHOOL_NOTIFICATION_LABELS={planning:'Horaire modifié',annulation:'Séance annulée',retablissement:'Séance rétablie',
+  devoir:'Devoir corrigé',note:'Note publiée'};
 
 function schNotificationsPage() {
   const rows=schoolUI.data.notifications||[];
@@ -11,7 +12,7 @@ function schNotificationsPage() {
         <h2>${schValue(item.title)}</h2><div class="school-meta">
           ${item.child_name&&schoolUI.data.account.role==='parent'?`<span>${schValue(item.child_name)}</span><span>·</span>`:''}
           <time data-no-i18n="true" datetime="${new Date(item.event_at).toISOString()}">${schEsc(schTimestamp(item.event_at))}</time>
-          ${item.kind==='planning'?`<span>·</span><span>${schValue(schDate(item.date)+' · '+schClock(item.start_minute))}</span>`:''}
+          ${item.start_minute!=null?`<span>·</span><span>${schValue(schDate(item.date)+' · '+schClock(item.start_minute))}</span>`:''}
         </div></div>
       <button type="button" class="btn secondary small" data-school-action="open-notification" data-id="${schEsc(item.event_key)}">Ouvrir</button>
     </article>`).join(''):schEmpty('Aucune notification.')}
@@ -26,8 +27,8 @@ async function schOpenNotification(button) {
     marked=true;
     const params=new URLSearchParams(event.kind==='note'?{id:event.target}:{session:event.target});
     if(event.child_id)params.set('child',event.child_id);
-    const routes={planning:'/session',devoir:'/homework',note:'/grade'};
-    const payload=await schRequest(routes[event.kind]+'?'+params);
+    const route=event.kind==='note'?'/grade':event.kind==='devoir'?'/homework':'/session';
+    const payload=await schRequest(route+'?'+params);
     if(!button.isConnected)return;
     if(event.kind==='note')schGradeDialog(payload);
     else if(event.kind==='devoir')schHomeworkView(payload,event.child_id);
@@ -45,7 +46,7 @@ function schResultsPage() {
   const filters=schoolUI.resultFilters;
   const subjects=[...new Set(gradeReport.map(row=>row.subject))].sort((a,b)=>a.localeCompare(b,schLocale()));
   if(!subjects.includes(filters.subject))filters.subject='';
-  return `<div class="school-title"><h1>${account.role==='eleve'?'Mes résultats':'Résultats'}</h1>${schGradeReportButton()}</div>
+  return `<div class="school-title"><h1>${account.role==='eleve'?'Mes notes et progrès':'Ses résultats'}</h1>${schGradeReportButton()}</div>
     <section class="card school-stack">
       ${!child?schEmpty('Aucun élève associé à ce compte.'):!gradeReport.length?schEmpty('Aucune note publiée.'):`
         <div class="school-fields">
