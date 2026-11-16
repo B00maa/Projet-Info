@@ -32,6 +32,38 @@ async function schoolQuiz(db,account,id) {
     result:attempt?schoolQuizResult(questions,JSON.parse(attempt.answers)):null};
 }
 
+async function schoolQuizResults(db,account,id) {
+  schoolRoles(account,'professeur');
+  schoolRequire(schoolId(id),'Séance invalide.');
+  const scope=schoolSessionScope(account,null);
+  const quiz=await schoolFirst(db,`SELECT s.title,c.name AS class_name,q.questions,
+    (SELECT json_group_array(json_object('name',roster.name,'answers',json(roster.answers),'submittedAt',roster.submitted_at))
+      FROM (
+        SELECT a.name,t.answers,t.submitted_at FROM school_enrolments e
+        JOIN school_accounts a ON a.id=e.student_id AND a.role='eleve' AND a.active=1
+        LEFT JOIN school_quiz_attempts t ON t.session_id=q.session_id AND t.student_id=e.student_id AND t.quiz_revision=q.revision
+        WHERE e.class_id=s.class_id ORDER BY a.name COLLATE NOCASE,a.id
+      ) roster) AS roster
+    FROM school_sessions s JOIN school_classes c ON c.id=s.class_id
+    JOIN school_session_quizzes q ON q.session_id=s.id
+    WHERE s.id=? AND (${scope.where})`,[id,...scope.args]);
+  if(!quiz)throw new SchoolError(404,'Ce quiz de révision est introuvable.');
+
+  const items=JSON.parse(quiz.questions);
+  const questions=items.map(({prompt})=>({prompt,correct:0}));
+  let completed=0;
+  const roster=JSON.parse(quiz.roster).map(({name,answers,submittedAt})=>{
+    if(answers===null)return {name,score:null,submittedAt:null};
+    completed++;
+    const {score,corrections}=schoolQuizResult(items,answers);
+    corrections.forEach(({choice,correct},index)=>{
+      if(choice===correct)questions[index].correct++;
+    });
+    return {name,score,submittedAt};
+  });
+  return {title:quiz.title,className:quiz.class_name,completed,roster,questions};
+}
+
 async function schoolQuizSave(db,account,data) {
   schoolRoles(account,'professeur');
   schoolRequire(schoolId(data.id)&&Number.isInteger(data.revision)&&data.revision>=0,'Quiz invalide.');

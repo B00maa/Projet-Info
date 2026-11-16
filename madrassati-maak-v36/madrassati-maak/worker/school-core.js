@@ -407,6 +407,7 @@ async function schoolState(db,account,url) {
 async function schoolLifeRead(env,account,route,url) {
   const db=env.DB;
   const params=url.searchParams;
+  if(route==='/quiz/results')return json(await schoolQuizResults(db,account,params.get('session')));
   if(route==='/attendance') return json(await schoolAttendanceRoster(db,account,params.get('session')));
   if(route==='/justification/file') {
     const row=await schoolJustificationRow(db,account,params.get('session'),params.get('student'));
