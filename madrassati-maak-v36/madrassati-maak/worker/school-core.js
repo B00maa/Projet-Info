@@ -342,6 +342,12 @@ async function schoolState(db,account,url) {
   const canSeeHomework=['eleve','parent','professeur'].includes(account.role);
   const extra=[];
   const attach=(key,value)=>extra.push(Promise.resolve(value).then(result=>{state[key]=result;}));
+  if(view==='notifications') {
+    attach('notifications',schoolNotifications(db,account,children).then(rows=>{
+      state.unreadNotifications=rows.filter(row=>row.read_at==null).length;
+      return rows;
+    }));
+  } else attach('unreadNotifications',schoolUnreadNotifications(db,account,children));
   if((view==='notes'||view==='semaine')&&child) {
     attach('gradeReport',account.role==='eleve'?state.grades:schoolPublishedGrades(db,child.id,week,false));
   }
@@ -394,6 +400,9 @@ async function schoolLifeRead(env,account,route,url) {
     return schoolDownload(env,row);
   }
   const child=schoolChild(await schoolChildren(db,account),params.get('child'));
+  if(route==='/session')return json({session:schoolSessionView(await schoolSessionDetails(db,account,child,params.get('session')))});
+  if(route==='/grade')return json(await schoolPublishedGradeDetail(db,account,child,params.get('id')));
+  if(route==='/quiz')return json(await schoolQuiz(db,account,params.get('session')));
   if(route==='/resource/file') {
     const id=params.get('id');
     schoolRequire(schoolId(id),'Ressource invalide.');
@@ -422,6 +431,10 @@ async function schoolLifeWrite(request,env,account,route) {
       case '/accounts/import/preview': return json(await schoolImportStudents(db,account,data,false));
       case '/accounts/import': return json(await schoolImportStudents(db,account,data,true));
       case '/catchup': await schoolCatchup(db,account,data); break;
+      case '/session/series': return json(await schoolSeriesPreview(db,account,data));
+      case '/notifications/read': return json(await schoolReadNotification(db,account,data));
+      case '/quiz': return json(await schoolQuizSave(db,account,data));
+      case '/quiz/submit': return json(await schoolQuizSubmit(db,account,data));
       case '/period': await schoolPeriodSave(db,account,data); break;
       case '/period/close': await schoolPeriodClose(db,account,data); break;
       case '/period/publish': await schoolPeriodPublish(db,account,data); break;

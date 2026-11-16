@@ -270,6 +270,17 @@ function schoolPublishedGrades(db,studentId,week,inWeek) {
     [studentId,Date.now(),...(inWeek ? [week.from,week.until] : [])]);
 }
 
+async function schoolPublishedGradeDetail(db,account,child,id) {
+  schoolRoles(account,'eleve','parent');
+  schoolRequire(child&&schoolId(id),'Évaluation invalide.');
+  const result=await schoolFirst(db,`SELECT e.id,e.title,e.subject,e.date,g.value AS score,p.publish_at,
+    a.instruction FROM school_evaluations e JOIN school_periods p ON p.id=e.period_id
+    LEFT JOIN school_assessments a ON a.id=e.assessment_id JOIN json_each(e.scores) g
+    WHERE e.id=? AND g.key=? AND p.publish_at<=?`,[id,child.id,Date.now()]);
+  if(!result)throw new SchoolError(404,'Cette évaluation publiée est introuvable.');
+  return result;
+}
+
 function schoolGradeProgress(db,period) {
   if (!period) return [];
   return schoolAll(db,`WITH work AS (
