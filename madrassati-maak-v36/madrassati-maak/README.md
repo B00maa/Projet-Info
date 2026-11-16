@@ -1,6 +1,6 @@
 # Madrassati Maâk
 
-Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 43 ainsi que ses ressources et ses migrations SQL.
+Madrassati Maâk est une plateforme scolaire en français et en arabe. Cette archive contient le code de la version publiée 44 ainsi que ses ressources et ses migrations SQL.
 
 ## Lancer le projet
 
@@ -32,7 +32,7 @@ Les noms des variables d’environnement sont indiqués dans `.env.example`. Con
 
 Dans **Administration → Parents → Ajouter un parent**, créez un compte et cochez les élèves à associer. Le bouton **Modifier** met à jour les associations.
 
-Les élèves, les parents et les professeurs peuvent choisir **Changer le mot de passe** en haut de leur espace scolaire. Ils utilisent leur mot de passe ou code personnel actuel. Les autres sessions sont fermées après le changement.
+Après connexion, la cloche ouvre les notifications et l’icône de sortie déconnecte le compte. Toute nouvelle connexion ouvre le tableau de bord du compte. Les élèves, les parents et les professeurs peuvent ouvrir leur avatar, puis sélectionner **Changer le mot de passe**. Ils saisissent leur code initial ou leur mot de passe actuel, puis choisissent un nouveau mot de passe.
 
 Les professeurs peuvent générer des documents depuis une classe attribuée ou en **Préparation libre**. Le coach peut enregistrer un plan et générer ses chapitres un par un. Il reprend au chapitre suivant après une interruption.
 
