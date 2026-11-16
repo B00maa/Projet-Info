@@ -11,7 +11,7 @@ function schCoursesPage() {
   const current=groups.get(schoolUI.courseSubject);
   if(current)return `<div class="school-title"><h1>${schValue(schoolUI.courseSubject)}</h1>
     <button type="button" class="btn secondary" data-school-action="course-subject" data-value="">Toutes les matières</button></div>
-    <section class="card school-stack">${current.map(item=>schSessionRow(item)).join('')}</section>`;
+    <section class="card school-stack">${current.map(item=>schSessionRow(item,false,true,true)).join('')}</section>`;
   return `<div class="school-title"><h1>Mes cours</h1>${data.account.role==='professeur'?
     `<button type="button" class="btn primary" data-school-action="edit-session" data-kind="course" ${data.directory.classes.length?'':'disabled'}>Publier un cours</button>`:''}</div>
     ${groups.size?`<div class="school-card-grid">${[...groups].sort(([a],[b])=>a.localeCompare(b,'fr')).map(([subject,items])=>
@@ -104,13 +104,14 @@ function schHomeworkPage() {
        schEmpty(toCorrect?'Aucun devoir à corriger.':'Aucun devoir publié.')}</section>`;
 }
 
-function schHomeworkFile(session,student) {
+function schHomeworkFile(session,student,childId) {
   if(!student.file_name)return '';
   const params=schFamilyParams({session:session.id,student:student.student_id});
+  if(childId)params.set('child',childId);
   return `<div><a class="btn secondary small" href="${schEsc(SCHOOL_API+'/homework/file?'+params)}">${schValue(student.file_name)}</a></div>`;
 }
 
-function schHomeworkView({session,submissions}) {
+function schHomeworkView({session,submissions},childId) {
   const role=schoolUI.data.account.role;
   const pupil=role==='eleve';
   const teacher=role==='professeur';
@@ -141,7 +142,7 @@ function schHomeworkView({session,submissions}) {
   }
   const submitted=entry?`<section class="school-block school-stack"><div class="school-session-top"><h3>Travail remis</h3>
     ${schHomeworkStatus({...entry,due_date:session.due_date})}</div>
-    ${entry.answer?`<p data-no-i18n="true" dir="auto">${schEsc(entry.answer)}</p>`:''}${schHomeworkFile(session,entry)}
+    ${entry.answer?`<p data-no-i18n="true" dir="auto">${schEsc(entry.answer)}</p>`:''}${schHomeworkFile(session,entry,childId)}
     ${entry.feedback?`<h3>Correction</h3><p data-no-i18n="true" dir="auto">${schEsc(entry.feedback)}</p>`:''}</section>`:'';
   const submit=pupil&&!entry?.corrected_at?`<form class="form school-block" data-school-form="homework-submit"
     data-id="${session.id}" data-revision="${entry?.revision||0}">

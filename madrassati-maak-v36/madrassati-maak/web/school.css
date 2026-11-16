@@ -49,6 +49,8 @@
 .school-tabs a[aria-current="page"] { background: #e4efe1; color: #234f3c; }
 .school-nav-count { display: inline-grid; place-items: center; min-inline-size: 1.4em; min-block-size: 1.4em; padding-inline: .25em;
   color: #fff; background: #285d42; border-radius: 999px; font-size: .78em; font-weight: 750; }
+.school-inbox-link { gap: .4rem; }
+.school-body .school-inbox-link[aria-current="page"] { background: #e4efe1; }
 .school-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; align-items: start; }
 .school-stack { display: grid; gap: .8rem; }
 .school-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; }
@@ -95,7 +97,7 @@
 .school-grade-import-preview .school-table-wrap { max-block-size: 16rem; overflow: auto; }
 .school-choices label { display: flex; align-items: center; gap: .65rem; padding: .4rem; margin: .12rem 0; cursor: pointer; }
 .school-choices label > span { min-inline-size: 0; overflow-wrap: anywhere; }
-.school-body .form .school-choices input[type="checkbox"] {
+.school-body .form .school-choices :is(input[type="checkbox"], input[type="radio"]) {
   inline-size: 1.125rem;
   block-size: 1.125rem;
   min-inline-size: 0;
@@ -106,6 +108,15 @@
   accent-color: #285d42;
   cursor: pointer;
 }
+.school-series-dates { margin: 0; padding-inline-start: 1.5rem; max-block-size: 14rem; overflow: auto; }
+.school-series-dates li + li { margin-block-start: .3rem; }
+.school-series-dates .tag { margin-inline-start: .35rem; }
+.school-quiz-question { min-inline-size: 0; border: 1px solid var(--school-line); border-radius: 10px; padding: .8rem; max-block-size: none; }
+.school-quiz-question legend { padding-inline: .35rem; font-weight: 650; overflow-wrap: anywhere; }
+.school-result-score { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
+.school-result-score meter { inline-size: 4.5rem; }
+.school-result-score meter::-webkit-meter-optimum-value { background: #347b55; }
+.school-result-score meter::-moz-meter-bar { background: #347b55; }
 .school-scores { padding: 0; border: 0; min-inline-size: 0; }
 .school-scores:disabled input { background: #f5f7f4; color: var(--school-ink); }
 .school-table { border-collapse: collapse; inline-size: 100%; }
