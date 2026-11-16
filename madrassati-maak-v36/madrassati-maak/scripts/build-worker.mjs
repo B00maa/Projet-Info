@@ -13,14 +13,15 @@ const mimeTypes = {
 };
 const web = new URL('../web/',import.meta.url);
 const dist = new URL('../dist/',import.meta.url);
+const demoEntries = new Set(['index.html','app.js','roles.js','games.js','i18n-games.js']);
 const assets = {};
 for (const path of (await readdir(web,{recursive:true})).sort()) {
   const type = mimeTypes[extname(path)];
-  if (!type) continue;
+  if (!type || demoEntries.has(path)) continue;
   const bytes = await readFile(new URL(path,web));
   assets[`/${path}`] = {type,bytes:bytes.toString('base64')};
 }
-if (!assets['/index.html']) throw new Error('Missing web/index.html');
+if (!assets['/school.html']) throw new Error('Missing web/school.html');
 const workerSources=[
   'school-core','school-access','school-planning','school-grades','school-attendance',
   'school-work','school-communication','school-series','school-notifications','school-quizzes','teacher-course','index'
