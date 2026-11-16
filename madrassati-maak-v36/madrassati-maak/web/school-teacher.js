@@ -94,7 +94,7 @@ function schTeacherRoster() {
   const fatigue=new Set(teacherFatigue.filter(row=>row.expires_at>schNow()).map(row=>row.student_id));
   return `<p class="admin-result-count" role="status">${schCountLabel(rows.length,'élève','élèves')}</p>
     ${rows.length?`<ul class="admin-list school-teacher-roster">${rows.map(student=>`<li class="roster-row">
-      <div class="admin-identity">${schStaffAvatar(student.name)}<strong>${schValue(student.name)}</strong></div>
+      <div class="admin-identity">${schWorkspaceAvatar(student.name)}<strong>${schValue(student.name)}</strong></div>
       <div class="roster-row-meta"><span class="tag blue">${schValue(classes.get(student.class_id))}</span>
         ${fatigue.has(student.id)?'<span class="tag orange">Mode fatigue activé</span>':''}</div>
     </li>`).join('')}</ul>`:schEmpty(query?'Aucun élève ne correspond à la recherche.':'Aucun élève inscrit dans cette classe.')}`;
