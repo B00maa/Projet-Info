@@ -87,6 +87,15 @@ function schoolDueHomework(db,children,until,limit) {
   [JSON.stringify(children.map(child=>child.id)),until,limit]);
 }
 
+function schoolHomeworkCounts(db,account,child) {
+  const scope=schoolSessionScope(account,child);
+  return schoolFirst(db,`SELECT COUNT(*) FILTER(WHERE p.submitted_at IS NULL) AS pending,
+    COUNT(*) FILTER(WHERE p.submitted_at IS NOT NULL AND p.corrected_at IS NULL) AS submitted,
+    COUNT(p.corrected_at) AS corrected
+    FROM school_sessions s LEFT JOIN school_submissions p ON p.session_id=s.id AND p.student_id=?
+    WHERE (${scope.where}) AND s.exercise<>''`,[child.id,...scope.args]);
+}
+
 async function schoolHomeworkSession(db,account,child,id) {
   schoolRoles(account,'professeur','eleve','parent');
   schoolRequire(schoolId(id),'Devoir invalide.');

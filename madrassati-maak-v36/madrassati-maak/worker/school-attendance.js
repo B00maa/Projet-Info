@@ -46,13 +46,14 @@ async function schoolAttendanceRoster(db,account,id) {
     FROM school_enrolments e JOIN school_accounts a ON a.id=e.student_id AND a.active=1 AND a.role='eleve'
     LEFT JOIN school_attendance p ON p.student_id=e.student_id AND p.session_id=?
     WHERE e.class_id=? ORDER BY a.name,a.id`,[session.id,session.class_id]);
-  const open=schoolSessionInstant(session.date,session.start_minute)<=Date.now();
+  const open=session.cancelled_at==null&&schoolSessionInstant(session.date,session.start_minute)<=Date.now();
   return {session:schoolSessionView(session),roster,open};
 }
 
 async function schoolAttendanceSave(env,account,data) {
   const db=env.DB;
   const {session,roster,open}=await schoolAttendanceRoster(db,account,data.session);
+  schoolRequire(session.cancelled_at==null,'Cette séance est annulée.');
   schoolRequire(open,'L’appel est disponible à partir du début de la séance.');
   schoolRequire(Array.isArray(data.marks)&&data.marks.length<=roster.length,'Liste d’appel invalide.');
   const students=new Map(roster.map(student=>[student.id,student]));
@@ -74,7 +75,7 @@ async function schoolAttendanceSave(env,account,data) {
       json_extract(value,'$.revision') AS revision FROM json_each(?)
   ), valid AS (
     SELECT 1 FROM school_sessions s JOIN school_accounts actor ON actor.id=? AND actor.active=1
-    WHERE s.id=? AND s.class_id=? AND (actor.role='administration' OR (s.teacher_id=actor.id AND EXISTS (
+    WHERE s.id=? AND s.class_id=? AND s.cancelled_at IS NULL AND (actor.role='administration' OR (s.teacher_id=actor.id AND EXISTS (
       SELECT 1 FROM school_teaching t WHERE t.teacher_id=actor.id AND t.class_id=s.class_id)))
     AND NOT EXISTS (
       SELECT 1 FROM marks m LEFT JOIN school_attendance p ON p.session_id=s.id AND p.student_id=m.student_id
@@ -104,7 +105,7 @@ async function schoolAttendanceSave(env,account,data) {
   }
 }
 
-function schoolAbsences(db,account,child) {
+function schoolAbsences(db,account,child,includePresent=false) {
   if(account.role==='administration') return schoolAll(db,`SELECT p.session_id,p.student_id,p.status,p.marked_at,
     p.justification,p.justification_status,p.justified_at,p.reviewed_at,p.file_name,p.revision,s.title,s.date,s.subject,
     c.name AS class_name,a.name AS student_name FROM school_attendance p
@@ -114,7 +115,7 @@ function schoolAbsences(db,account,child) {
   if(!child) return [];
   return schoolAll(db,`SELECT p.session_id,p.student_id,p.status,p.marked_at,p.justification_status,p.reviewed_at,
     s.title,s.date,s.subject FROM school_attendance p JOIN school_sessions s ON s.id=p.session_id
-    WHERE p.student_id=? AND p.status<>'present' ORDER BY s.date DESC,p.marked_at DESC LIMIT 120`,[child.id]);
+    WHERE p.student_id=? AND (?=1 OR p.status<>'present') ORDER BY s.date DESC,p.marked_at DESC LIMIT 120`,[child.id,Number(includePresent)]);
 }
 
 async function schoolJustificationRow(db,account,session,student) {

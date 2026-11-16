@@ -322,7 +322,7 @@ async function schoolState(db,account,url) {
     sessions:sessions.map(schoolSessionView),notices,fatigue,teacherFatigue};
   if (account.role === 'eleve' && view==='rattrapage') {
     const [previous,progress,missed]=await Promise.all([
-      schoolSessions(db,scope,'s.date<=?',[schoolToday()],true),
+      schoolSessions(db,scope,'s.cancelled_at IS NULL AND s.date<=?',[schoolToday()],true),
       schoolAll(db,'SELECT session_id,step FROM school_catchup WHERE student_id=?',[account.id]),
       schoolAll(db,"SELECT session_id FROM school_attendance WHERE student_id=? AND status='absent'",[account.id])
     ]);
@@ -342,6 +342,10 @@ async function schoolState(db,account,url) {
   const canSeeHomework=['eleve','parent','professeur'].includes(account.role);
   const extra=[];
   const attach=(key,value)=>extra.push(Promise.resolve(value).then(result=>{state[key]=result;}));
+  if(view==='rattrapage'&&account.role==='parent') {
+    attach('catchup',schoolSessions(db,scope,'s.date<=?',[schoolToday()],true)
+      .then(rows=>rows.filter(schoolSessionEnded).map(schoolSessionView)));
+  }
   if(view==='notifications') {
     attach('notifications',schoolNotifications(db,account,children).then(rows=>{
       state.unreadNotifications=rows.filter(row=>row.read_at==null).length;
@@ -355,7 +359,9 @@ async function schoolState(db,account,url) {
   if (account.role==='administration'&&(!requestedView||view==='notes')) attach('gradeProgress',schoolGradeProgress(db,period));
   if (account.role==='administration'&&view==='historique') attach('accountHistory',schoolAccountHistory(db,url.searchParams.get('page')));
   if (view==='evaluations') attach('assessments',schoolAssessments(db,account,child));
-  if (view==='absences'||(view==='semaine'&&account.role==='parent')) attach('absences',schoolAbsences(db,account,child));
+  if (view==='absences'||(view==='semaine'&&account.role==='parent')) {
+    attach('absences',schoolAbsences(db,account,child,account.role==='parent'&&view==='absences'));
+  }
   if (view==='devoirs'&&canSeeHomework) attach('homework',schoolHomeworkList(db,account,child));
   if (account.role==='eleve'&&view==='aujourdhui') {
     const today=schoolToday();
@@ -363,7 +369,10 @@ async function schoolState(db,account,url) {
     state.today=today;
     attach('upcoming',schoolUpcomingSessions(db,scope,4));
     attach('dueHomework',schoolDueHomework(db,children,until,6));
-    attach('missedSessions',schoolSessions(db,scope,`s.date<=?
+    attach('homeSubjects',schoolSessionSubjects(db,scope));
+    attach('homeClass',schoolFirst(db,'SELECT c.name FROM school_enrolments e JOIN school_classes c ON c.id=e.class_id WHERE e.student_id=?',
+      [account.id]).then(row=>row?.name??null));
+    attach('missedSessions',schoolSessions(db,scope,`s.cancelled_at IS NULL AND s.date<=?
       AND EXISTS (SELECT 1 FROM school_attendance p WHERE p.session_id=s.id AND p.student_id=? AND p.status='absent')
       AND NOT EXISTS (SELECT 1 FROM school_catchup c WHERE c.session_id=s.id AND c.student_id=? AND c.step>=3)`,
     [today,account.id,account.id],true,12).then(rows=>rows.filter(schoolSessionEnded).slice(0,6).map(schoolSessionView)));
@@ -371,6 +380,10 @@ async function schoolState(db,account,url) {
   if (account.role==='parent'&&view==='famille') {
     const today=schoolToday();
     attach('family',schoolFamilyOverview(db,children,schoolDay(Date.parse(today)+7*SCHOOL_DAY)));
+    if(child) {
+      attach('upcoming',schoolUpcomingSessions(db,scope,3));
+      attach('homeworkCounts',schoolHomeworkCounts(db,account,child));
+    }
   }
   if (account.role==='professeur'&&view==='dashboard') {
     attach('upcoming',schoolUpcomingSessions(db,scope,4));
@@ -432,6 +445,7 @@ async function schoolLifeWrite(request,env,account,route) {
       case '/accounts/import': return json(await schoolImportStudents(db,account,data,true));
       case '/catchup': await schoolCatchup(db,account,data); break;
       case '/session/series': return json(await schoolSeriesPreview(db,account,data));
+      case '/session/cancellation': await schoolSessionCancellation(db,account,data); break;
       case '/notifications/read': return json(await schoolReadNotification(db,account,data));
       case '/quiz': return json(await schoolQuizSave(db,account,data));
       case '/quiz/submit': return json(await schoolQuizSubmit(db,account,data));
