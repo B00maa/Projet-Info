@@ -3,7 +3,8 @@
 const state={lang:'fr'};
 try { state.lang=localStorage.getItem('madrassati-school-language')==='ar' ? 'ar' : 'fr'; } catch {}
 const schoolUI={data:null,error:null,week:'',child:'',request:0,clock:null,dirty:false,busy:false,editor:null,previewUrl:'',
-  timer:null,toast:null,peer:'',courseSubject:'',adminFilters:null,staffMenu:false,rosterQuery:'',setupState:''};
+  timer:null,toast:null,peer:'',courseSubject:'',adminFilters:null,staffMenu:false,rosterQuery:'',setupState:'',
+  resultFilters:{subject:'',from:'',to:''}};
 const SCHOOL_API='/api/school';
 const schShowSetup = () => ['ready','missing-code','invalid-code'].includes(schoolUI.setupState);
 const SCHOOL_ROLE_NAMES={administration:'Administration',professeur:'Professeur',eleve:'Élève',parent:'Parent'};
@@ -11,15 +12,15 @@ const SCHOOL_NAV={
   administration:[['dashboard','Vue d’ensemble'],['planning','Planning des séances'],['absences','Absences et justificatifs'],
     ['classes','Classes'],['eleves','Élèves inscrits'],['professeurs','Professeurs'],['parents','Parents'],['notes','Périodes et résultats'],
     ['evaluations','Évaluations'],['comptes','Gestion des comptes'],['historique','Historique des comptes'],['bibliotheque','Bibliothèque'],
-    ['statistiques','Statistiques'],['messages','Messagerie'],['annonces','Annonces'],['parametres','Paramètres']],
+    ['statistiques','Statistiques'],['messages','Messagerie'],['annonces','Annonces'],['parametres','Paramètres'],['notifications','Notifications']],
   professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes classes'],['eleves','Mes élèves'],
     ['notes','Saisie des notes'],['evaluations','Évaluations'],['planning','Mes séances'],['presences','Suivi des présences'],
-    ['cours','Mes cours'],['coach','Coach pédagogique'],['devoirs','Devoirs de mes classes'],['bibliotheque','Bibliothèque'],['annonces','Annonces']],
+    ['cours','Mes cours'],['coach','Coach pédagogique'],['devoirs','Devoirs de mes classes'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']],
   eleve:[['aujourdhui','Aujourd’hui'],['planning','Mes séances'],['absences','Mes absences'],['fatigue','Mode fatigue'],['cours','Mes cours'],['bibliotheque','Bibliothèque'],
     ['devoirs','Devoirs'],['evaluations','Évaluations'],['rattrapage','À rattraper'],['notes','Mes résultats'],
-    ['coach','Coach d’études'],['messages','Messagerie'],['annonces','Annonces']],
+    ['coach','Coach d’études'],['messages','Messagerie'],['annonces','Annonces'],['notifications','Notifications']],
   parent:[['famille','Vue famille'],['semaine','Résumé de la semaine'],['absences','Absences et justificatifs'],['fatigue','Mode fatigue'],
-    ['devoirs','Devoirs'],['evaluations','Évaluations'],['messages','Messagerie'],['annonces','Annonces']]
+    ['devoirs','Devoirs'],['evaluations','Évaluations'],['notes','Résultats'],['messages','Messagerie'],['annonces','Annonces'],['notifications','Notifications']]
 };
 const SCHOOL_NAV_GROUPS=[
   ['Organisation',['comptes','aujourdhui','famille','planning','semaine','absences','fatigue']],
@@ -126,10 +127,10 @@ function schSafeLink(value) {
   catch { return ''; }
 }
 
-function schFileLink(id,view=false) {
+function schFileLink(id,view=false,childId=schoolUI.data?.child?.id) {
   const params=new URLSearchParams();
   if (view) params.set('view','1');
-  if (schoolUI.data?.account.role==='parent' && schoolUI.data.child) params.set('child',schoolUI.data.child.id);
+  if (schoolUI.data?.account.role==='parent' && childId) params.set('child',childId);
   return SCHOOL_API+'/file/'+encodeURIComponent(id)+(params.size ? '?'+params : '');
 }
 
@@ -176,6 +177,7 @@ async function schLoad({quiet=false}={}) {
       schoolUI.adminFilters=null;
       schoolUI.staffMenu=false;
       schoolUI.rosterQuery='';
+      schoolUI.resultFilters={subject:'',from:'',to:''};
     }
     schoolUI.data=data;
     schoolUI.error=null;
@@ -294,6 +296,8 @@ function schHeaderTools(data,staff=false) {
   return `<div class="school-header-tools">${data?`<div class="school-user">
       ${staff?schStaffAvatar(data.account.name):''}<div><strong>${schValue(data.account.name)}</strong>
         ${!staff||data.account.name!==SCHOOL_ROLE_NAMES[data.account.role]?'<span>'+SCHOOL_ROLE_NAMES[data.account.role]+'</span>':''}</div></div>
+      ${data.account.passwordSetup?'':`<a class="btn secondary small school-inbox-link" href="#notifications" ${schPage()==='notifications'?'aria-current="page"':''}>
+        <span>Notifications</span>${data.unreadNotifications?`<span class="school-nav-count" data-no-i18n="true">${data.unreadNotifications}</span>`:''}</a>`}
       ${data.account.passwordSetup?'':'<button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>'}
       ${schCanChangePassword(data.account)&&!data.account.passwordSetup?'<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':''}
       ${data.account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
@@ -327,7 +331,7 @@ function schRender() {
       ${schPasswordForm(true)}</section>`);
     return;
   }
-  const chooser=data.account.role==='parent'&&data.children.length>1&&!['famille','messages','annonces'].includes(page)?
+  const chooser=data.account.role==='parent'&&data.children.length>1&&!['famille','messages','annonces','notifications'].includes(page)?
     `<div class="school-child-picker"><label for="schoolChild">Élève suivi</label>
     <select id="schoolChild">${data.children.map(child=>schOpt(child.id,child.name,data.child?.id)).join('')}</select></div>`:'';
   const content={dashboard:admin?schAdminDashboard:schTeacherDashboard,classes:admin?schAdminClasses:schTeacherClasses,
@@ -335,7 +339,7 @@ function schRender() {
     comptes:schAccountsPage,parents:schAccountsPage,historique:schAdminHistory,statistiques:schAdminStatistics,parametres:schAdminSettings,
     aujourdhui:schTodayPage,famille:schFamilyPage,planning:schPlanningPage,notes:schNotesPage,rattrapage:schCatchupPage,semaine:schParentPage,
     absences:schAbsencesPage,fatigue:schFatiguePage,cours:schCoursesPage,bibliotheque:schLibraryPage,devoirs:schHomeworkPage,
-    evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,
+    evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,notifications:schNotificationsPage,
     coach:data.account.role==='eleve'?studentCoachPage:teacherCoachPage};
   const view=data.view===page?content[page]():'<p role="status" class="school-empty">Chargement de l’espace scolaire…</p>';
   schNode('schoolApp').innerHTML=localizeHTML((staff?'':schNavigation(page,data))+chooser+view);
@@ -373,15 +377,17 @@ function schSessionMeta(item) {
     <span>·</span><time data-no-i18n="true" datetime="${item.date}">${schEsc(schDate(item.date))} · <bdi dir="ltr">${schClock(item.start_minute)}–${schClock(item.start_minute+item.duration)}</bdi></time></div>`;
 }
 
-function schSessionRow(item,edit=false,showTeacher=true) {
+function schSessionRow(item,edit=false,showTeacher=true,showQuiz=false) {
   const now=schMinute(schNow());
   const canAttend=edit&&item.date+'T'+schClock(item.start_minute)<=now;
   const {account,directory}=schoolUI.data;
   const needsTeacher=account.role==='administration'&&schAdminSessionNeedsTeacher(item,directory,now);
   return `<article class="school-session"><div class="school-session-top"><div><h3>${schValue(item.title)}</h3>
     ${schSessionMeta(item)}${showTeacher?`<p class="school-muted school-small">${schValue(item.teacher_name)}</p>`:''}
-    ${needsTeacher?'<span class="tag orange">Professeur à réattribuer</span>':''}</div>
+    ${needsTeacher?'<span class="tag orange">Professeur à réattribuer</span>':''}
+    ${item.series_id?'<span class="tag soft">Série hebdomadaire</span>':''}</div>
     <div class="school-actions"><button type="button" class="btn secondary small" data-school-action="view-session" data-id="${item.id}">Voir la séance</button>
+    ${showQuiz?schQuizButton(item):''}
     ${canAttend?`<button type="button" class="btn secondary small" data-school-action="attendance" data-id="${item.id}">Faire l’appel</button>`:''}
     ${edit?`<button type="button" class="btn secondary small" data-school-action="edit-session" data-id="${item.id}">Modifier la séance</button>`:''}</div></div></article>`;
 }
@@ -403,25 +409,27 @@ function schLessonReading(description) {
   }).join('')+'</article>';
 }
 
-function schSessionContent(item,previewUrl='') {
+function schSessionContent(item,previewUrl='',childId=schoolUI.data?.child?.id) {
   const file=item.file;
-  const support=previewUrl || (file && item.id ? schFileLink(item.id,true) : '');
+  const support=previewUrl || (file && item.id ? schFileLink(item.id,true,childId) : '');
   const video=schSafeLink(item.video_url);
   const meeting=schSafeLink(item.meeting_url);
   const calm=schoolUI.data?.account.role==='eleve'&&schFatigueCurrent()?.status==='approved';
   const work=calm&&item.short_exercise?item.short_exercise:item.exercise;
+  const quiz=schQuizButton(item);
   return `<div class="school-stack">
     ${schSessionMeta(item)}
     ${item.description?`<section class="school-block"><h3>Consigne</h3>${schLessonReading(item.description)}</section>`:''}
     ${file&&support?`<section class="school-block"><h3>Support de la séance</h3>
       ${file.type?.startsWith('video/')?`<video controls preload="metadata" src="${schEsc(support)}"></video>`:''}
       <a class="btn secondary" href="${schEsc(support)}" target="_blank" rel="noopener noreferrer">${schValue(file.name)}</a>
-      ${previewUrl?'':`<a class="btn secondary" href="${schEsc(schFileLink(item.id))}">Télécharger le support</a>`}</section>`:''}
+      ${previewUrl?'':`<a class="btn secondary" href="${schEsc(schFileLink(item.id,false,childId))}">Télécharger le support</a>`}</section>`:''}
     ${video?`<section class="school-block"><a href="${schEsc(video)}" target="_blank" rel="noopener noreferrer" class="btn secondary">Vidéo en ligne</a></section>`:''}
     ${work?`<section class="school-block"><h3>${work===item.short_exercise&&calm?'Exercice en version courte':'Exercice associé'}</h3>
       <p data-no-i18n="true" dir="auto">${schEsc(work)}</p>
       <p class="school-small school-muted"><span>Date de remise</span> · ${schValue(schDate(item.due_date||item.date))}</p></section>`:''}
-    ${meeting?`<div><a class="btn primary" href="${schEsc(meeting)}" target="_blank" rel="noopener noreferrer">Rejoindre la séance</a></div>`:''}</div>`;
+    ${meeting?`<div><a class="btn primary" href="${schEsc(meeting)}" target="_blank" rel="noopener noreferrer">Rejoindre la séance</a></div>`:''}
+    ${quiz?`<div>${quiz}</div>`:''}</div>`;
 }
 
 function schPlanningPage() {
@@ -581,6 +589,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     }
     if(event.target.matches('select[data-school-directory]')&&schDirectoryInput(event.target))return;
     if(event.target.id==='schoolTeacherClassFilter'&&schTeacherChangeClass(event.target))return;
+    if(schResultChange(event.target))return;
     if(rememberTeacherCoachInput(event.target))return;
     if(event.target.id==='schoolChild'){schoolUI.child=event.target.value;schLoad();}
     schLifeChange(event.target);
@@ -602,6 +611,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     event.preventDefault();
     if(event.target.dataset.schoolForm==='change-password')return schPasswordSubmit(event.target,event.submitter);
     if(event.target.dataset.schoolForm==='teacher-course')return submitTeacherCourseForm(event.target,event.submitter);
+    if(['quiz-save','quiz-submit'].includes(event.target.dataset.schoolForm))return schQuizSubmit(event.target,event.submitter);
     if(!schLifeSubmit(event.target,event.submitter))schStaffSubmit(event.target,event.submitter);
   });
   document.addEventListener('click',event=>{
@@ -649,6 +659,9 @@ window.addEventListener('DOMContentLoaded',()=>{
       const session=schFindSession(id);
       if(session)schShowDialog(session.title,schSessionContent(session));
     } else if(action==='catchup')schMutation(button,'/catchup',{id,step:Number(value)},'Étape terminée');
+    else if(action==='open-notification')schOpenNotification(button);
+    else if(action==='grade-detail')schOpenGrade(button);
+    else if(action==='quiz'||action.startsWith('quiz-'))schQuizAction(button);
     else if(action==='download-pack')schDownloadPack(button);
     else if(!schLifeAction(button))schStaffAction(button);
   });

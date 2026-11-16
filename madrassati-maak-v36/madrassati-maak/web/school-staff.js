@@ -261,6 +261,7 @@ function schSessionEditor(item,draft=item) {
         <button class="btn secondary" type="button" data-school-action="slots">Proposer des créneaux</button>
         <div class="school-stack school-note" id="schoolSlots" role="status"></div>
       </div>
+      ${admin?schSeriesFields(item):''}
       <div class="school-full"><label for="schoolSessionDescription">Consigne</label>
         <textarea name="description" id="schoolSessionDescription" maxlength="${TEACHER_LESSON_PUBLISH_LIMIT}">${schEsc(draft?.description)}</textarea></div>
       <div><label for="schoolMeeting">Lien de la séance</label><input type="url" name="meeting" id="schoolMeeting" value="${schEsc(item?.meeting_url)}" placeholder="https://"></div>
@@ -407,8 +408,7 @@ function schOpenGrades() {
 function schNotesPage() {
   const data=schoolUI.data;
   if(data.account.role==='administration')return schAdminNotes();
-  if(data.account.role==='eleve')return `<div class="school-title"><h1>Mes résultats</h1>${schGradeReportButton()}</div>
-    <section class="card">${schGradesTable(data.grades||[])}</section>`;
+  if(['eleve','parent'].includes(data.account.role))return schResultsPage();
   const period=schPeriod();
   const list=data.evaluations||[];
   return `<div class="school-title"><h1>Saisie des notes</h1><a class="btn secondary" href="#evaluations">Voir les évaluations</a></div>
@@ -603,6 +603,7 @@ function schStaffChange(target) {
       schStaffClasses(target.value).map(c=>schOpt(c.id,c.name+' · '+c.subject,current)).join(''));
   }
   if(target.closest('#schoolSessionForm')){
+    schSeriesChange(target.form);
     schNode('schoolSessionPreview').hidden=true;
     schNode('schoolSlots').innerHTML='';
     schClearPreview();
@@ -636,7 +637,7 @@ function schStaffSubmit(form,button) {
         archived?'Le compte a été archivé.':'Le compte a été restauré.',{close:true});
     }
     case 'session':
-      return schMutation(button,'/session',schSessionValues(form),'La séance a été enregistrée.',{close:true,week:data.date});
+      return schSaveSession(form,button);
     case 'period':
       return schMutation(button,'/period',{...schPeriodPayload(form),...data},'La période a été enregistrée.');
     case 'open-grades':
@@ -672,6 +673,7 @@ function schStaffAction(button) {
     return schSessionEditor(item,item||(button.dataset.kind==='course'?{kind:'course'}:null));
   }
   if(action==='preview-session')return schPreviewSession();
+  if(action==='preview-series')return schPreviewSeries(button.form,button);
   if(action==='slots')return schSlots(button);
   if(action==='pick-slot'){
     schNode('schoolSessionDate').value=button.dataset.date;
