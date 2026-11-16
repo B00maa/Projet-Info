@@ -1,11 +1,13 @@
 'use strict';
 
-function schQuizButton(item) {
+function schQuizActions(item) {
   const {account,directory}=schoolUI.data;
   const teacher=account.role==='professeur'&&item.teacher_id===account.id&&directory.classes.some(row=>row.id===item.class_id);
   if(!item.id||(!teacher&&!(account.role==='eleve'&&item.has_quiz)))return '';
   const label=teacher?(item.has_quiz?'Modifier le quiz':'Ajouter un quiz'):'Faire le quiz';
-  return `<button class="btn secondary small" type="button" data-school-action="quiz" data-id="${schEsc(item.id)}">${label}</button>`;
+  const id=schEsc(item.id);
+  return `${teacher&&item.has_quiz?`<button class="btn secondary small" type="button" data-school-action="quiz-results" data-id="${id}">Résultats du quiz</button>`:''}
+    <button class="btn secondary small" type="button" data-school-action="quiz" data-id="${id}">${label}</button>`;
 }
 
 function schQuizQuestion(item,index) {
@@ -32,6 +34,7 @@ function schQuizQuestion(item,index) {
 function schQuizEditor(quiz) {
   const questions=quiz.questions.length?quiz.questions:[null];
   return `<form class="form" data-school-form="quiz-save" data-next-question="${questions.length}">
+    ${quiz.revision?'<p class="school-small school-muted">Chaque nouvel enregistrement ouvre une nouvelle version du quiz.</p>':''}
     <div class="school-stack" id="schoolQuizQuestions">${questions.map(schQuizQuestion).join('')}</div>
     ${schError()}<div class="school-actions">
       <button type="button" class="btn secondary" data-school-action="quiz-add">Ajouter une question</button>
@@ -73,6 +76,36 @@ function schQuizDialog(quiz) {
   if(teacher)schQuizUpdateControls(schNode('schoolQuizQuestions'));
 }
 
+function schQuizResultsDialog({title,className,completed,roster,questions}) {
+  const metrics=[['Élèves inscrits',roster.length],['Quiz terminés',completed],['Quiz à faire',roster.length-completed]];
+  const score=(correct,total)=>schValue(schExportNumber(correct)+' / '+schExportNumber(total));
+  schShowDialog('Résultats du quiz',`<div class="school-stack school-quiz-results">
+    <div><h3>${schValue(title)}</h3><p class="school-meta">${schValue(className)}</p></div>
+    <dl class="school-quiz-metrics">${metrics.map(([label,value])=>`<div>
+      <dt>${label}</dt><dd>${schValue(schExportNumber(value))}</dd></div>`).join('')}</dl>
+    <p class="school-small school-muted">Les scores correspondent à la dernière tentative de la version actuelle du quiz.</p>
+    ${completed?`<section class="school-block school-stack">
+      <h3>Bonnes réponses par question</h3>
+      <ul class="school-quiz-breakdown">${questions.map(({prompt,correct})=>`<li>
+        ${schValue(prompt)}
+        <div class="school-quiz-rate"><meter min="0" max="${completed}" value="${correct}" aria-hidden="true"></meter>
+          <strong>${score(correct,completed)}</strong></div>
+      </li>`).join('')}</ul>
+    </section>`:roster.length?schEmpty('Aucune réponse pour cette version du quiz.'):''}
+    ${roster.length?`<div class="school-table-wrap"><table class="school-table school-quiz-roster">
+      <thead><tr><th scope="col">Élève</th><th scope="col">Score</th><th scope="col">Dernière tentative</th></tr></thead>
+      <tbody>${roster.map(student=>`<tr>
+        <th scope="row">${schValue(student.name)}</th>
+        <td>${student.score===null?'<span class="tag soft">À faire</span>':`<strong>${score(student.score,questions.length)}</strong>`}</td>
+        <td>${student.submittedAt===null?'—':`<time datetime="${new Date(student.submittedAt).toISOString()}">
+          ${schValue(schTimestamp(student.submittedAt))}</time>`}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:schEmpty('Aucun élève inscrit dans cette classe.')}
+  </div>`);
+  schDialog().scrollTop=0;
+  schNode('schoolClose').focus({preventScroll:true});
+}
+
 function schQuizUpdateControls(questions) {
   const count=questions.children.length;
   questions.querySelectorAll('[data-school-action="quiz-remove"]').forEach(button=>{button.disabled=count===1;});
@@ -82,6 +115,7 @@ function schQuizUpdateControls(questions) {
 function schQuizAction(button) {
   const action=button.dataset.schoolAction;
   if(action==='quiz')return schFetchDialog(button,'/quiz?'+new URLSearchParams({session:button.dataset.id}),schQuizDialog);
+  if(action==='quiz-results')return schFetchDialog(button,'/quiz/results?'+new URLSearchParams({session:button.dataset.id}),schQuizResultsDialog);
   if(action==='quiz-retry')return schQuizDialog({...schoolUI.editor.quiz,result:null});
   const questions=schNode('schoolQuizQuestions');
   if(action==='quiz-add'&&questions.children.length<8) {
