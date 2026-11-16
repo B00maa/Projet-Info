@@ -84,52 +84,83 @@ function schParentLifeSummary() {
       '<p class="school-muted">Aucune action en attente.</p>'}</section>`;
 }
 
+function schDashboardSection(title,href,label,content) {
+  return `<section class="card school-stack"><div class="school-session-top">
+    <h2>${title}</h2><a class="text-link" href="${href}">${label}</a>
+    </div><div>${content}</div></section>`;
+}
+
+function schDashboardHomework(rows) {
+  return rows.length?rows.map(item=>`<article class="school-session school-session-top">
+    <div><h3>${schValue(item.title)}</h3><p class="school-meta">${schValue(item.subject+' · '+schDate(item.due_date))}</p></div>
+    <button type="button" class="btn secondary small" data-school-action="homework" data-id="${item.id}">Ouvrir le devoir</button>
+    </article>`).join(''):schEmpty('Aucun devoir à rendre dans les sept prochains jours.');
+}
+
+function schDashboardUpcoming(rows) {
+  return rows.length?rows.map(item=>schSessionRow(item)).join(''):schEmpty('Aucune séance à venir.');
+}
+
 function schTodayPage() {
-  const {today,upcoming,dueHomework,missedSessions}=schoolUI.data;
-  return `<div class="school-title"><h1>Aujourd’hui</h1><span class="school-muted">${schValue(schDate(today))}</span></div>
-    ${schFatigueBanner()}<div class="school-grid">
-      <section class="card school-full school-stack"><div class="school-session-top"><h2>Prochaines séances</h2>
-        <a class="text-link" href="#planning">Voir le planning</a></div>
-        ${upcoming.length?upcoming.map(schSessionRow).join(''):schEmpty('Aucune séance à venir.')}</section>
-      <section class="card school-stack"><div class="school-session-top"><h2>Devoirs à rendre</h2><a class="text-link" href="#devoirs">Tous les devoirs</a></div>
-        ${dueHomework.length?dueHomework.map(item=>`<article class="school-session school-session-top">
-          <div><h3>${schValue(item.title)}</h3><div class="school-meta">${schValue(item.subject+' · '+schDate(item.due_date))}</div></div>
-          <button type="button" class="btn secondary small" data-school-action="homework" data-id="${item.id}">Ouvrir le devoir</button></article>`).join(''):
-          schEmpty('Aucun devoir à rendre dans les sept prochains jours.')}</section>
-      <section class="card school-stack"><div class="school-session-top"><h2>Cours à rattraper</h2><a class="text-link" href="#rattrapage">Voir le rattrapage</a></div>
-        ${missedSessions.length?missedSessions.map(item=>`<article class="school-session school-session-top">
-          <div><h3>${schValue(item.title)}</h3>${schSessionMeta(item)}</div>
-          <a class="btn secondary small" href="#rattrapage?seance=${item.id}">Rattraper la séance</a></article>`).join(''):
-          schEmpty('Aucune séance manquée à rattraper.')}</section>
+  const {account,today,upcoming,dueHomework,missedSessions,homeSubjects,homeClass}=schoolUI.data;
+  const subjects=homeSubjects.length?`<div class="school-card-grid school-home-subjects">${homeSubjects
+    .map(item=>schCourseSubjectTile(item.subject,item.total)).join('')}</div>`:schEmpty('Aucun cours publié.');
+  const missed=missedSessions.length?missedSessions.map(item=>`<article class="school-session school-session-top">
+    <div><h3>${schValue(item.title)}</h3>${schSessionMeta(item)}</div>
+    <a class="btn secondary small" href="#rattrapage?seance=${item.id}">Rattraper la séance</a></article>`).join(''):
+    schEmpty('Aucune séance manquée à rattraper.');
+  return `<div class="school-title school-home-heading"><div>
+      <h1><span>Bonjour</span>, ${schValue(account.name)}</h1>
+      <p class="school-meta">${schValue([homeClass,schExportDate(today)].filter(Boolean).join(' · '))}</p>
+      </div><a class="btn secondary" href="#fatigue">${siteIcon('heart','sm')}<span>Mode fatigue</span></a></div>
+    ${schFatigueBanner()}
+    <div class="school-home-grid school-student-home">
+      <div class="school-stack">
+        <section class="school-study-entry"><div class="school-home-quick">
+          <span class="school-home-icon">${siteIcon('robot','sm')}</span><h2>Coach d’études</h2>
+        </div><a class="btn secondary small" href="#coach">Poser une question</a></section>
+        ${schDashboardSection('Mes matières','#cours','Toutes les matières',subjects)}
+        ${schDashboardSection('Devoirs à rendre','#devoirs','Tous les devoirs',schDashboardHomework(dueHomework))}
+      </div>
+      <div class="school-stack">
+        ${schDashboardSection('Prochaines séances','#planning','Mon calendrier',schDashboardUpcoming(upcoming))}
+        ${schDashboardSection('Cours à rattraper','#rattrapage','Voir le rattrapage',missed)}
+      </div>
     </div>`;
 }
 
 function schFamilyPage() {
-  const {family}=schoolUI.data;
-  const action=(child,page,label)=>`<button type="button" class="btn secondary small" data-school-action="family-child"
-    data-id="${child.id}" data-value="${page}">${label}<span class="sr-only"> · ${schValue(child.name)}</span></button>`;
-  return `<div class="school-title"><h1>Vue famille</h1></div>
-    ${family.length?`<div class="school-grid">${family.map(child=>`<section class="card school-stack">
-      <div class="school-session-top"><div><h2>${schValue(child.name)}</h2>
-        ${child.class_name?`<p class="school-meta">${schValue(child.class_name)}</p>`:''}</div>
-        ${action(child,'semaine','Voir le résumé')}</div>
-      <div class="school-actions">
-        ${child.absences?action(child,'absences','<span>Absences à justifier</span> · '+schValue(child.absences)):''}
-        ${child.fatigue?action(child,'fatigue','Demande de mode fatigue'):''}
-      </div>
-      <h3>Échéances des devoirs</h3>
-      ${child.homework.length?`<ul class="school-family-deadlines">${child.homework.map(item=>`<li>
-        ${schValue(item.title)} · <time datetime="${item.due_date}">${schValue(schDate(item.due_date))}</time></li>`).join('')}</ul>
-        <div>${action(child,'devoirs','Voir les devoirs')}</div>`:schEmpty('Aucun devoir à rendre dans les sept prochains jours.')}
-    </section>`).join('')}</div>`:`<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`}`;
-}
-
-function schFamilyChild(id,page) {
   const data=schoolUI.data;
-  if(data.account.role!=='parent'||!data.children.some(child=>child.id===id)||!['semaine','absences','fatigue','devoirs'].includes(page))return;
-  schoolUI.child=id;
-  schoolUI.week='';
-  location.hash=page;
+  const child=data.family.find(row=>row.id===data.child?.id);
+  const heading=`<div class="school-title school-home-heading"><h1>Suivi de mon enfant</h1>
+    ${schChildPicker(data)}<a class="btn secondary" href="#messages">${siteIcon('mail','sm')}<span>Contacter les enseignants</span></a></div>`;
+  if(!child)return heading+`<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`;
+  const cards=[['a-rendre','clipboard','À rendre',data.homeworkCounts.pending],
+    ['remis','file','Remis',data.homeworkCounts.submitted],['corriges','check','Corrigés',data.homeworkCounts.corrected]];
+  const needsReview=child.absences||child.fatigue;
+  return heading+`<div class="school-stack school-family-home">
+    <section class="card school-family-summary">
+      <div class="school-child-summary">${schWorkspaceAvatar(child.name)}<div>
+        <h2>${schValue(child.name)}</h2><p class="school-meta">${schValue(child.class_name||'')}</p>
+      </div></div>
+      <div class="school-family-counters">${cards.map(([filter,icon,label,count])=>`<a class="school-home-quick" href="#devoirs?etat=${filter}">
+        <span class="school-home-icon">${siteIcon(icon,'sm')}</span>
+        <span><strong>${schValue(count)}</strong><small>${label}</small></span></a>`).join('')}</div>
+      ${needsReview?`<div class="school-actions school-full">
+        ${child.absences?`<a class="btn secondary small" href="#absences"><span>Absences à justifier</span> · ${schValue(child.absences)}</a>`:''}
+        ${child.fatigue?'<a class="btn secondary small" href="#fatigue">Demande de mode fatigue</a>':''}
+      </div>`:''}
+    </section>
+    <div class="school-home-grid">
+      ${schDashboardSection('Devoirs à rendre','#devoirs','Tous les devoirs',schDashboardHomework(child.homework))}
+      ${schDashboardSection('Prochaines séances','#planning','Son planning',schDashboardUpcoming(data.upcoming)+
+        '<div class="school-note"><a class="text-link" href="#rattrapage">Voir les séances passées</a></div>')}
+    </div>
+    <section class="card school-stack"><h2>Accès rapides</h2><div class="school-family-counters">
+      ${[['notes','chart','Voir ses résultats'],['absences','calendar','Son assiduité'],['bibliotheque','folder','Consulter la bibliothèque']].map(([page,icon,label])=>
+        `<a class="school-home-quick" href="#${page}"><span class="school-home-icon">${siteIcon(icon,'sm')}</span><strong>${label}</strong></a>`).join('')}
+    </div></section>
+  </div>`;
 }
 
 async function schFetchDialog(button,path,render) {
@@ -171,15 +202,16 @@ function schAttendanceDialog(button) {
 function schAbsencesPage() {
   const data=schoolUI.data;
   const admin=data.account.role==='administration';
+  const parent=data.account.role==='parent';
   const rows=data.absences||[];
-  return `<div class="school-title"><h1>Absences et justificatifs</h1>
+  return `<div class="school-title"><h1>${parent?'Son assiduité':'Absences et justificatifs'}</h1>
     ${data.child?`<span class="tag mint">${schValue(data.child.name)}</span>`:''}</div>
     <p class="school-note school-muted">${admin?'Enregistrez le justificatif après réception du document papier.':
       'Remettez le justificatif papier à l’administration.'}</p>
     <div class="school-stack">${rows.length?rows.map(row=>`<article class="card school-stack">
       <div class="school-session-top"><div><h2>${schValue(row.title)}</h2>
       <div class="school-meta">${schValue([row.student_name,row.class_name,row.subject,schDate(row.date)].filter(Boolean).join(' · '))}</div></div>
-      <div class="school-actions"><span class="tag orange">${SCHOOL_ATTENDANCE_LABELS[row.status]}</span>
+      <div class="school-actions"><span class="tag ${row.status==='present'?'mint':'orange'}">${SCHOOL_ATTENDANCE_LABELS[row.status]}</span>
       ${row.justification_status?`<span class="tag ${row.justification_status==='accepted'?'mint':'soft'}">
         ${SCHOOL_JUSTIFICATION_LABELS[row.justification_status]}</span>`:''}</div></div>
       ${admin&&row.justification_status!=='accepted'?`<div class="school-actions">
@@ -187,7 +219,7 @@ function schAbsencesPage() {
           data-id="${row.session_id}" data-student="${row.student_id}" data-revision="${row.revision}">Justificatif papier reçu</button>
         ${row.justification_status==='pending'?`<button type="button" class="btn secondary small" data-school-action="justification"
           data-id="${row.session_id}" data-student="${row.student_id}">Voir le justificatif déjà transmis</button>`:''}</div>`:''}</article>`).join(''):
-      `<section class="card">${schEmpty('Aucune absence ni aucun retard signalé.')}</section>`}</div>`;
+      `<section class="card">${schEmpty(parent?'Aucun relevé de présence publié.':'Aucune absence ni aucun retard signalé.')}</section>`}</div>`;
 }
 
 function schJustificationDialog(button) {

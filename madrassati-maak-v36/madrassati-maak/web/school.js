@@ -3,7 +3,7 @@
 const state={lang:'fr'};
 try { state.lang=localStorage.getItem('madrassati-school-language')==='ar' ? 'ar' : 'fr'; } catch {}
 const schoolUI={data:null,error:null,week:'',child:'',request:0,clock:null,dirty:false,busy:false,editor:null,previewUrl:'',
-  timer:null,toast:null,peer:'',courseSubject:'',adminFilters:null,staffMenu:false,rosterQuery:'',setupState:'',
+  timer:null,toast:null,peer:'',adminFilters:null,sidebarOpen:false,rosterQuery:'',setupState:'',
   resultFilters:{subject:'',from:'',to:''}};
 const SCHOOL_API='/api/school';
 const schShowSetup = () => ['ready','missing-code','invalid-code'].includes(schoolUI.setupState);
@@ -16,17 +16,13 @@ const SCHOOL_NAV={
   professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes classes'],['eleves','Mes élèves'],
     ['notes','Saisie des notes'],['evaluations','Évaluations'],['planning','Mes séances'],['presences','Suivi des présences'],
     ['cours','Mes cours'],['coach','Coach pédagogique'],['devoirs','Devoirs de mes classes'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']],
-  eleve:[['aujourdhui','Aujourd’hui'],['planning','Mes séances'],['absences','Mes absences'],['fatigue','Mode fatigue'],['cours','Mes cours'],['bibliotheque','Bibliothèque'],
-    ['devoirs','Devoirs'],['evaluations','Évaluations'],['rattrapage','À rattraper'],['notes','Mes résultats'],
-    ['coach','Coach d’études'],['messages','Messagerie'],['annonces','Annonces'],['notifications','Notifications']],
-  parent:[['famille','Vue famille'],['semaine','Résumé de la semaine'],['absences','Absences et justificatifs'],['fatigue','Mode fatigue'],
-    ['devoirs','Devoirs'],['evaluations','Évaluations'],['notes','Résultats'],['messages','Messagerie'],['annonces','Annonces'],['notifications','Notifications']]
+  eleve:[['aujourdhui','Mon tableau de bord'],['planning','Mon calendrier'],['absences','Mes absences'],['fatigue','Mode fatigue'],['cours','Mes matières'],['bibliotheque','Bibliothèque'],
+    ['devoirs','Mes devoirs'],['evaluations','Évaluations'],['rattrapage','À rattraper'],['notes','Mes notes et progrès'],
+    ['coach','Coach d’études'],['messages','Mes messages'],['annonces','Annonces'],['notifications','Notifications']],
+  parent:[['famille','Suivi de mon enfant'],['semaine','Résumé de la semaine'],['planning','Son planning'],['rattrapage','Séances passées'],
+    ['absences','Son assiduité'],['fatigue','Mode fatigue'],['devoirs','Ses devoirs'],['evaluations','Évaluations'],
+    ['notes','Ses résultats'],['messages','Contacter les enseignants'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']]
 };
-const SCHOOL_NAV_GROUPS=[
-  ['Organisation',['comptes','aujourdhui','famille','planning','semaine','absences','fatigue']],
-  ['Apprentissage',['cours','bibliotheque','devoirs','evaluations','notes','rattrapage','coach']],
-  ['Communication',['messages','annonces']]
-];
 const SCHOOL_PERIOD_LABELS={scheduled:'Ouverture programmée',open:'Saisie ouverte',closed:'Saisie fermée',
   'publication-planned':'Publication programmée',published:'Notes publiées'};
 const SCHOOL_AR={
@@ -175,7 +171,7 @@ async function schLoad({quiet=false}={}) {
       resetTeacherCoach();
       resetAICoach();
       schoolUI.adminFilters=null;
-      schoolUI.staffMenu=false;
+      schoolUI.sidebarOpen=false;
       schoolUI.rosterQuery='';
       schoolUI.resultFilters={subject:'',from:'',to:''};
     }
@@ -282,27 +278,32 @@ function schAuth() {
     <div><a class="text-link" href="/">Explorer la maquette</a></div></div></section>`;
 }
 
-function schNavigation(page,data) {
-  const tabs=new Map(SCHOOL_NAV[data.account.role]);
-  const counts={messages:data.notices?.messages,annonces:data.notices?.announcements,fatigue:data.notices?.fatigue};
-  return `<nav class="school-tabs" aria-label="Espace scolaire">${SCHOOL_NAV_GROUPS.map(([group,keys])=>{
-    const links=keys.filter(key=>tabs.has(key)).map(key=>`<a href="#${key}" ${key===page?'aria-current="page"':''}>
-      <span>${tabs.get(key)}</span>${counts[key]?`<span class="school-nav-count" data-no-i18n="true">${counts[key]}</span>`:''}</a>`);
-    return links.length?`<div class="school-nav-group"><strong>${group}</strong><div class="school-nav-links">${links.join('')}</div></div>`:'';
-  }).join('')}</nav>`;
+function schChildPicker(data) {
+  if(data.account.role!=='parent'||data.children.length<2)return '';
+  return `<div class="school-child-picker"><label for="schoolChild">Élève suivi</label>
+    <select id="schoolChild">${data.children.map(child=>schOpt(child.id,child.name,data.child?.id)).join('')}</select></div>`;
 }
 
-function schHeaderTools(data,staff=false) {
-  return `<div class="school-header-tools">${data?`<div class="school-user">
-      ${staff?schStaffAvatar(data.account.name):''}<div><strong>${schValue(data.account.name)}</strong>
-        ${!staff||data.account.name!==SCHOOL_ROLE_NAMES[data.account.role]?'<span>'+SCHOOL_ROLE_NAMES[data.account.role]+'</span>':''}</div></div>
-      ${data.account.passwordSetup?'':`<a class="btn secondary small school-inbox-link" href="#notifications" ${schPage()==='notifications'?'aria-current="page"':''}>
-        <span>Notifications</span>${data.unreadNotifications?`<span class="school-nav-count" data-no-i18n="true">${data.unreadNotifications}</span>`:''}</a>`}
-      ${data.account.passwordSetup?'':'<button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>'}
-      ${schCanChangePassword(data.account)&&!data.account.passwordSetup?'<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':''}
-      ${data.account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
-        '<a class="btn secondary small" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top">Se déconnecter</a>'}`:''}
-      <button type="button" class="btn secondary small" data-school-action="language" aria-label="${state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe'}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button></div>`;
+function schHeaderTools(data,workspace=false) {
+  const language=`<button type="button" class="btn secondary small" data-school-action="language"
+    aria-label="${state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe'}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button>`;
+  if(!data)return `<div class="school-header-tools">${language}</div>`;
+  const {account}=data;
+  const user=`<span class="school-user">${workspace?schWorkspaceAvatar(account.name):''}
+    <span class="school-user-name"><strong>${schValue(account.name)}</strong>
+      ${account.name!==SCHOOL_ROLE_NAMES[account.role]?'<small>'+SCHOOL_ROLE_NAMES[account.role]+'</small>':''}</span></span>`;
+  const notifications=account.passwordSetup?'':`<a class="btn secondary small school-inbox-link" href="#notifications" ${schPage()==='notifications'?'aria-current="page"':''}>
+    ${siteIcon('bell','sm')}<span>Notifications</span>${data.unreadNotifications?`<span class="school-nav-count" data-no-i18n="true">${data.unreadNotifications}</span>`:''}</a>`;
+  const refresh=account.passwordSetup?'':'<button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>';
+  const password=schCanChangePassword(account)&&!account.passwordSetup?
+    '<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':'';
+  const logout=account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
+    '<a class="btn secondary small" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top">Se déconnecter</a>';
+  const learner=workspace&&['eleve','parent'].includes(account.role);
+  return `<div class="school-header-tools">${learner?`${language}${notifications}
+    <details class="school-account-menu"><summary aria-label="Menu du compte">${user}${siteIcon('chevron','sm')}</summary>
+      <div class="school-account-actions">${refresh}${password}${logout}</div></details>`:
+    user+notifications+refresh+password+logout+language}</div>`;
 }
 
 function schRender() {
@@ -312,18 +313,18 @@ function schRender() {
   const role=data?.account.role;
   const admin=role==='administration';
   const passwordSetup=data?.account.passwordSetup;
-  const staff=!!SCHOOL_STAFF_SPACES[role]&&!passwordSetup;
+  const workspace=!!SCHOOL_SPACES[role]&&!passwordSetup;
   const page=data?schPage():'';
-  const nav=schNode('schoolStaffNavigation');
+  const nav=schNode('schoolWorkspaceNavigation');
   const header=schNode('schoolHeader');
-  if(staff)document.body.dataset.space=role;
+  if(workspace)document.body.dataset.space=role;
   else delete document.body.dataset.space;
-  nav.hidden=!staff;
-  nav.innerHTML=staff?localizeHTML(schStaffNavigation(page,data)):'';
-  header.className=staff?'topbar school-staff-topbar':'school-header';
-  header.innerHTML=localizeHTML((staff?schStaffHeader(page,role):
+  nav.hidden=!workspace;
+  nav.innerHTML=workspace?localizeHTML(schWorkspaceNavigation(page,data)):'';
+  header.className=workspace?'topbar school-workspace-topbar':'school-header';
+  header.innerHTML=localizeHTML((workspace?schWorkspaceHeader(page,role):
     '<a class="school-brand" href="/"><img src="/assets/logo.svg" width="42" height="42" alt=""><strong>Madrassati Maâk</strong></a>')+
-    schHeaderTools(data,staff));
+    schHeaderTools(data,workspace));
   if(!data){schNode('schoolApp').innerHTML=localizeHTML(schAuth());return;}
   if(passwordSetup) {
     schNode('schoolApp').innerHTML=localizeHTML(`<section class="card school-stack school-password-setup">
@@ -331,9 +332,7 @@ function schRender() {
       ${schPasswordForm(true)}</section>`);
     return;
   }
-  const chooser=data.account.role==='parent'&&data.children.length>1&&!['famille','messages','annonces','notifications'].includes(page)?
-    `<div class="school-child-picker"><label for="schoolChild">Élève suivi</label>
-    <select id="schoolChild">${data.children.map(child=>schOpt(child.id,child.name,data.child?.id)).join('')}</select></div>`:'';
+  const chooser=['famille','messages','annonces','notifications'].includes(page)?'':schChildPicker(data);
   const content={dashboard:admin?schAdminDashboard:schTeacherDashboard,classes:admin?schAdminClasses:schTeacherClasses,
     eleves:admin?schAccountsPage:schTeacherStudents,professeurs:schAccountsPage,presences:schTeacherAttendance,
     comptes:schAccountsPage,parents:schAccountsPage,historique:schAdminHistory,statistiques:schAdminStatistics,parametres:schAdminSettings,
@@ -342,7 +341,7 @@ function schRender() {
     evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,notifications:schNotificationsPage,
     coach:data.account.role==='eleve'?studentCoachPage:teacherCoachPage};
   const view=data.view===page?content[page]():'<p role="status" class="school-empty">Chargement de l’espace scolaire…</p>';
-  schNode('schoolApp').innerHTML=localizeHTML((staff?'':schNavigation(page,data))+chooser+view);
+  schNode('schoolApp').innerHTML=localizeHTML(chooser+view);
   restoreSchoolScroll(scroll);
   schoolUI.dirty=false;
   schScheduleBoundary();
@@ -379,17 +378,23 @@ function schSessionMeta(item) {
 
 function schSessionRow(item,edit=false,showTeacher=true,showQuiz=false) {
   const now=schMinute(schNow());
-  const canAttend=edit&&item.date+'T'+schClock(item.start_minute)<=now;
+  const future=item.date+'T'+schClock(item.start_minute)>now;
+  const cancelled=item.cancelled_at!=null;
   const {account,directory}=schoolUI.data;
-  const needsTeacher=account.role==='administration'&&schAdminSessionNeedsTeacher(item,directory,now);
+  const admin=account.role==='administration';
+  const canEdit=edit&&!cancelled&&['administration','professeur'].includes(account.role);
+  const needsTeacher=admin&&schAdminSessionNeedsTeacher(item,directory,now);
   return `<article class="school-session"><div class="school-session-top"><div><h3>${schValue(item.title)}</h3>
     ${schSessionMeta(item)}${showTeacher?`<p class="school-muted school-small">${schValue(item.teacher_name)}</p>`:''}
     ${needsTeacher?'<span class="tag orange">Professeur à réattribuer</span>':''}
-    ${item.series_id?'<span class="tag soft">Série hebdomadaire</span>':''}</div>
+    ${item.series_id?'<span class="tag soft">Série hebdomadaire</span>':''}
+    ${cancelled?'<span class="tag orange">Séance annulée</span>':''}</div>
     <div class="school-actions"><button type="button" class="btn secondary small" data-school-action="view-session" data-id="${item.id}">Voir la séance</button>
     ${showQuiz?schQuizButton(item):''}
-    ${canAttend?`<button type="button" class="btn secondary small" data-school-action="attendance" data-id="${item.id}">Faire l’appel</button>`:''}
-    ${edit?`<button type="button" class="btn secondary small" data-school-action="edit-session" data-id="${item.id}">Modifier la séance</button>`:''}</div></div></article>`;
+    ${canEdit&&!future?`<button type="button" class="btn secondary small" data-school-action="attendance" data-id="${item.id}">Faire l’appel</button>`:''}
+    ${canEdit?`<button type="button" class="btn secondary small" data-school-action="edit-session" data-id="${item.id}">Modifier la séance</button>`:''}
+    ${edit&&admin&&future?`<button type="button" class="btn secondary small" data-school-action="session-cancellation" data-id="${item.id}">
+      ${cancelled?'Rétablir la séance':'Annuler la séance'}</button>`:''}</div></div></article>`;
 }
 
 function schLessonReading(description) {
@@ -413,12 +418,15 @@ function schSessionContent(item,previewUrl='',childId=schoolUI.data?.child?.id) 
   const file=item.file;
   const support=previewUrl || (file && item.id ? schFileLink(item.id,true,childId) : '');
   const video=schSafeLink(item.video_url);
-  const meeting=schSafeLink(item.meeting_url);
+  const cancelled=item.cancelled_at!=null;
+  const meeting=cancelled?'':schSafeLink(item.meeting_url);
   const calm=schoolUI.data?.account.role==='eleve'&&schFatigueCurrent()?.status==='approved';
   const work=calm&&item.short_exercise?item.short_exercise:item.exercise;
   const quiz=schQuizButton(item);
   return `<div class="school-stack">
     ${schSessionMeta(item)}
+    ${cancelled?`<section class="school-callout school-cancelled-note"><h3>Séance annulée</h3>
+      <p data-no-i18n="true" dir="auto">${schEsc(item.cancel_reason)}</p></section>`:''}
     ${item.description?`<section class="school-block"><h3>Consigne</h3>${schLessonReading(item.description)}</section>`:''}
     ${file&&support?`<section class="school-block"><h3>Support de la séance</h3>
       ${file.type?.startsWith('video/')?`<video controls preload="metadata" src="${schEsc(support)}"></video>`:''}
@@ -440,7 +448,7 @@ function schPlanningPage() {
   const review=admin&&schViewParams().get('etat')==='reaffecter';
   const now=schMinute(schNow());
   const sessions=review?data.sessions.filter(item=>schAdminSessionNeedsTeacher(item,data.directory,now)):data.sessions;
-  return `<div class="school-title"><h1>${admin?'Planning des séances':'Mes séances'}</h1>
+  return `<div class="school-title"><h1>${SCHOOL_NAV[data.account.role].find(([key])=>key==='planning')[1]}</h1>
     ${edit?`<button type="button" class="btn primary" data-school-action="edit-session" ${ready?'':'disabled'}>Nouvelle séance</button>`:''}</div>
     ${schFatigueBanner()}
     ${schWeekBar(data.account.role==='eleve')}
@@ -461,6 +469,8 @@ function schFindSession(id) {
 function schCatchupPage() {
   const focus=schViewParams().get('seance');
   const previous=[...(schoolUI.data.catchup||[])].sort((a,b)=>Number(b.id===focus)-Number(a.id===focus));
+  if(schoolUI.data.account.role==='parent')return `<div class="school-title"><h1>Séances passées</h1></div>
+    <section class="card">${previous.length?previous.map(item=>schSessionRow(item)).join(''):schEmpty('Aucune séance passée.')}</section>`;
   const labels=['Consulter le support','Faire l’exercice','Marquer la séance comme rattrapée'];
   const render=item=>`<section class="card school-stack">
       <div class="school-session-top"><div><h2>${schValue(item.title)}</h2>${schSessionMeta(item)}</div>
@@ -591,7 +601,11 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(event.target.id==='schoolTeacherClassFilter'&&schTeacherChangeClass(event.target))return;
     if(schResultChange(event.target))return;
     if(rememberTeacherCoachInput(event.target))return;
-    if(event.target.id==='schoolChild'){schoolUI.child=event.target.value;schLoad();}
+    if(event.target.id==='schoolChild'){
+      schoolUI.child=event.target.value;
+      schLoad().then(()=>schNode('schoolChild')?.focus({preventScroll:true}));
+      return;
+    }
     schLifeChange(event.target);
     schStaffChange(event.target);
   });
@@ -615,7 +629,9 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(!schLifeSubmit(event.target,event.submitter))schStaffSubmit(event.target,event.submitter);
   });
   document.addEventListener('click',event=>{
-    if(event.target.closest('#schoolStaffSidebar a[href^="#"]')&&schoolUI.staffMenu)schStaffMenu(false);
+    const openAccount=schNode('schoolHeader').querySelector('.school-account-menu[open]');
+    if(openAccount&&!openAccount.contains(event.target))openAccount.open=false;
+    if(event.target.closest('#schoolWorkspaceSidebar a[href^="#"]')&&schoolUI.sidebarOpen)schWorkspaceMenu(false);
     const lessonReference=event.target.closest('[data-lesson-reference]');
     if(lessonReference){
       const heading=lessonReference.closest('.school-lesson-reading')
@@ -640,6 +656,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     const button=event.target.closest('[data-school-action]');
     if(!button || button.disabled)return;
     const {schoolAction:action,id,value}=button.dataset;
+    const accountMenu=button.closest('.school-account-menu');
+    if(accountMenu)accountMenu.open=false;
     if(action==='language'){
       state.lang=state.lang==='fr'?'ar':'fr';
       try { localStorage.setItem('madrassati-school-language',state.lang); } catch {}
@@ -649,9 +667,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     else if(action==='download-codes'&&schDialog().open&&schoolUI.credentials)schCodesWorkbook();
     else if(!schoolUI.data)return;
     else if(action==='change-password'&&schCanChangePassword(schoolUI.data.account))schPasswordDialog();
-    else if(action==='staff-menu')schStaffMenu(true);
-    else if(action==='staff-menu-close')schStaffMenu(false);
-    else if(action==='family-child')schFamilyChild(id,value);
+    else if(action==='workspace-menu')schWorkspaceMenu(true);
+    else if(action==='workspace-menu-close')schWorkspaceMenu(false);
     else if(action==='week'){
       schoolUI.week=Number(value)===0?'':schDay(schoolUI.data.week.from+Number(value)*7*86400000);
       schLoad();
@@ -666,17 +683,22 @@ window.addEventListener('DOMContentLoaded',()=>{
     else if(!schLifeAction(button))schStaffAction(button);
   });
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&schoolUI.staffMenu)schStaffMenu(false);
+    if(event.key!=='Escape')return;
+    const openAccount=schNode('schoolHeader').querySelector('.school-account-menu[open]');
+    if(openAccount) {
+      openAccount.open=false;
+      openAccount.querySelector('summary').focus({preventScroll:true});
+    }
+    if(schoolUI.sidebarOpen)schWorkspaceMenu(false);
   });
   window.addEventListener('hashchange',()=>{
     if(!schoolUI.data)return;
     if(schoolUI.data.account.passwordSetup)return;
     if(schDialog().open)schDialog().close();
-    schoolUI.courseSubject='';
-    if(SCHOOL_STAFF_SPACES[schoolUI.data.account.role]) {
+    if(SCHOOL_SPACES[schoolUI.data.account.role]) {
       schoolUI.adminFilters=null;
       schoolUI.rosterQuery='';
-      schStaffMenu(false);
+      schWorkspaceMenu(false);
       window.scrollTo({top:0,behavior:'instant'});
     }
     schLoad();

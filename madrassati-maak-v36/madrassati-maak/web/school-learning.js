@@ -1,5 +1,12 @@
 'use strict';
 
+function schCourseSubjectTile(subject,total) {
+  const params=new URLSearchParams({matiere:subject});
+  return `<a class="card school-subject" href="#cours?${params}">
+    <span class="school-home-icon">${siteIcon('book','sm')}</span>
+    <strong>${schValue(subject)}</strong><span class="school-small">${schValue(total)} <span>Cours</span></span></a>`;
+}
+
 function schCoursesPage() {
   const data=schoolUI.data;
   const courses=data.courses||[];
@@ -8,15 +15,15 @@ function schCoursesPage() {
     if(!groups.has(item.subject))groups.set(item.subject,[]);
     groups.get(item.subject).push(item);
   }
-  const current=groups.get(schoolUI.courseSubject);
-  if(current)return `<div class="school-title"><h1>${schValue(schoolUI.courseSubject)}</h1>
-    <button type="button" class="btn secondary" data-school-action="course-subject" data-value="">Toutes les matières</button></div>
+  const subject=schViewParams().get('matiere');
+  const current=groups.get(subject);
+  if(current)return `<div class="school-title"><h1>${schValue(subject)}</h1>
+    <a class="btn secondary" href="#cours">Toutes les matières</a></div>
     <section class="card school-stack">${current.map(item=>schSessionRow(item,false,true,true)).join('')}</section>`;
-  return `<div class="school-title"><h1>Mes cours</h1>${data.account.role==='professeur'?
+  return `<div class="school-title"><h1>${data.account.role==='eleve'?'Mes matières':'Mes cours'}</h1>${data.account.role==='professeur'?
     `<button type="button" class="btn primary" data-school-action="edit-session" data-kind="course" ${data.directory.classes.length?'':'disabled'}>Publier un cours</button>`:''}</div>
     ${groups.size?`<div class="school-card-grid">${[...groups].sort(([a],[b])=>a.localeCompare(b,'fr')).map(([subject,items])=>
-      `<button type="button" class="card school-subject" data-school-action="course-subject" data-value="${schEsc(subject)}">
-        <strong>${schValue(subject)}</strong><span class="school-small"><span data-no-i18n="true">${items.length}</span> <span>Cours</span></span></button>`).join('')}</div>`:
+      schCourseSubjectTile(subject,items.length)).join('')}</div>`:
       `<section class="card">${schEmpty('Aucun cours publié.')}</section>`}`;
 }
 
@@ -84,15 +91,21 @@ function schHomeworkStatus(item) {
 function schHomeworkPage() {
   const data=schoolUI.data;
   const teacher=data.account.role==='professeur';
-  const toCorrect=teacher&&schViewParams().get('etat')==='a-corriger';
-  const homework=(data.homework||[]).filter(item=>!toCorrect||item.submitted>item.corrected);
+  const parent=data.account.role==='parent';
+  const filter=schViewParams().get('etat');
+  const filters=teacher?[['a-corriger','À corriger',item=>item.submitted>item.corrected]]:parent?[
+    ['a-rendre','À rendre',item=>!item.submitted_at],['remis','Remis',item=>!!item.submitted_at&&!item.corrected_at],
+    ['corriges','Corrigés',item=>!!item.corrected_at]]:[];
+  const selected=filters.find(([key])=>key===filter);
+  const homework=(data.homework||[]).filter(item=>!selected||selected[2](item));
   if(!teacher)homework.sort((a,b)=>Number(!!a.submitted_at)-Number(!!b.submitted_at)||
     (a.submitted_at?b.due_date.localeCompare(a.due_date):a.due_date.localeCompare(b.due_date)));
-  return `<div class="school-title"><h1>${teacher?'Devoirs de mes classes':'Devoirs'}</h1>${teacher?
+  return `<div class="school-title"><h1>${teacher?'Devoirs de mes classes':parent?'Ses devoirs':'Mes devoirs'}</h1>${teacher?
     `<button class="btn primary" type="button" data-school-action="edit-session" ${data.directory.classes.length?'':'disabled'}>Nouvelle séance avec devoir</button>`:''}</div>
-    ${teacher?`<nav class="school-actions school-directory-tabs" aria-label="État des devoirs">
-      <a class="btn ${toCorrect?'secondary':'primary'} small" href="#devoirs" ${toCorrect?'':'aria-current="page"'}>Tous les devoirs</a>
-      <a class="btn ${toCorrect?'primary':'secondary'} small" href="#devoirs?etat=a-corriger" ${toCorrect?'aria-current="page"':''}>À corriger</a></nav>`:''}
+    ${filters.length?`<nav class="school-actions school-directory-tabs" aria-label="État des devoirs">
+      <a class="btn ${selected?'secondary':'primary'} small" href="#devoirs" ${selected?'':'aria-current="page"'}>Tous les devoirs</a>
+      ${filters.map(([key,label])=>`<a class="btn ${key===filter?'primary':'secondary'} small" href="#devoirs?etat=${key}"
+        ${key===filter?'aria-current="page"':''}>${label}</a>`).join('')}</nav>`:''}
     ${schFatigueBanner()}<section class="card school-stack">${homework.length?homework.map(item=>
       `<article class="school-session"><div class="school-session-top"><div><h2>${schValue(item.title)}</h2>
       <div class="school-meta">${schValue(item.subject+' · '+item.class_name)}
@@ -101,7 +114,7 @@ function schHomeworkPage() {
         <span>· Corrigés</span> ${schValue(item.corrected)}</span>`:schHomeworkStatus(item)}
         <button class="btn secondary small" type="button" data-school-action="homework" data-id="${item.id}">
         ${teacher?'Voir les remises':'Ouvrir le devoir'}</button></div></div></article>`).join(''):
-       schEmpty(toCorrect?'Aucun devoir à corriger.':'Aucun devoir publié.')}</section>`;
+       schEmpty(selected?teacher?'Aucun devoir à corriger.':'Aucun devoir dans cette catégorie.':'Aucun devoir publié.')}</section>`;
 }
 
 function schHomeworkFile(session,student,childId) {
@@ -179,12 +192,8 @@ function schLearningSubmit(form,button) {
 }
 
 function schLearningAction(button) {
-  const {schoolAction:action,id,value}=button.dataset;
-  if(action==='course-subject'){
-    schoolUI.courseSubject=value;
-    schRender();
-    schNode('schoolMain').focus({preventScroll:true});
-  } else if(action==='resource'||action==='resource-remove'){
+  const {schoolAction:action,id}=button.dataset;
+  if(action==='resource'||action==='resource-remove'){
     const item=id&&schoolUI.data.resources.find(resource=>resource.id===id);
     if(action==='resource')schResourceEditor(item||null);
     else if(item)schShowDialog('Supprimer la ressource',`<form class="form" data-school-form="resource-remove"

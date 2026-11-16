@@ -19,7 +19,7 @@
   background: #fff;
 }
 
-.school-brand, .school-header-tools, .school-actions, .school-tabs, .school-week {
+.school-brand, .school-header-tools, .school-actions, .school-week {
   display: flex;
   align-items: center;
   gap: .65rem;
@@ -29,7 +29,7 @@
 .school-brand { color: var(--school-ink); text-decoration: none; flex-shrink: 0; }
 .school-header-tools { justify-content: flex-end; }
 .school-user { text-align: end; line-height: 1.35; }
-.school-user span { display: block; color: var(--school-muted); font-size: .82rem; }
+.school-user small { display: block; color: var(--school-muted); font-size: .82rem; }
 .school-main { max-inline-size: 1148px; margin-inline: auto; padding: clamp(1rem,4vw,2.5rem) 1rem 3rem; }
 .school-body h1, .school-body h2, .school-body h3 { color: var(--school-ink); }
 .school-body h1 { font-size: clamp(1.65rem,4vw,2.25rem); line-height: 1.2; }
@@ -37,16 +37,6 @@
 .school-body h3 { font-size: 1rem; }
 .school-body .card { border-color: var(--school-line); padding: clamp(1rem,3vw,1.4rem); }
 .school-title { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-block-end: 1rem; }
-.school-tabs { display: grid; grid-template-columns: 1fr 1.35fr auto; align-items: start; gap: .9rem; margin-block: 0 1.25rem;
-  border-block-end: 1px solid var(--school-line); padding-block-end: .85rem; }
-.school-nav-group { min-inline-size: 0; }
-.school-nav-group > strong { display: block; margin-inline-start: .62rem; margin-block-end: .28rem;
-  font-size: .76rem; font-weight: 700; color: var(--school-muted); }
-.school-nav-links { display: flex; align-items: center; flex-wrap: wrap; gap: .22rem; }
-.school-tabs a { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .62rem; color: var(--school-ink);
-  text-decoration: none; border-radius: 10px; font-weight: 650; }
-.school-tabs a:hover { background: #f0f4ed; }
-.school-tabs a[aria-current="page"] { background: #e4efe1; color: #234f3c; }
 .school-nav-count { display: inline-grid; place-items: center; min-inline-size: 1.4em; min-block-size: 1.4em; padding-inline: .25em;
   color: #fff; background: #285d42; border-radius: 999px; font-size: .78em; font-weight: 750; }
 .school-inbox-link { gap: .4rem; }
@@ -92,8 +82,6 @@
 .school-password-setup { max-inline-size: 34rem; margin-inline: auto; }
 .school-account-status { display: grid; gap: .4rem; justify-items: start; max-inline-size: 10rem; }
 .school-parent-tasks { margin-block-end: 1rem; }
-.school-family-deadlines { padding-inline-start: 1.25rem; margin: 0; }
-.school-family-deadlines li + li { margin-block-start: .4rem; }
 .school-grade-import-preview .school-table-wrap { max-block-size: 16rem; overflow: auto; }
 .school-choices label { display: flex; align-items: center; gap: .65rem; padding: .4rem; margin: .12rem 0; cursor: pointer; }
 .school-choices label > span { min-inline-size: 0; overflow-wrap: anywhere; }
@@ -174,7 +162,6 @@
 
 @media (max-width: 690px) {
   .school-grid, .school-auth, .school-message-layout { grid-template-columns: minmax(0,1fr); }
-  .school-tabs { grid-template-columns: minmax(0,1fr); gap: .45rem; }
   .school-auth img { max-block-size: 185px; object-fit: contain; }
   .school-brand strong { font-size: .95rem; }
   .school-header { padding-inline: .8rem; }
@@ -186,5 +173,4 @@
   .school-fields { grid-template-columns: minmax(0,1fr); }
   .school-table th,.school-table td { padding: .55rem; }
   .school-main { padding-inline: .8rem; }
-  .school-tabs a { padding-inline: .55rem; }
 }

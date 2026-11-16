@@ -27,6 +27,7 @@ function schWeeklyPdf() {
   const sections=[...items.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.start_minute-b.start_minute).map(item=>({
     heading:item.title,text:[
       schWorkbookSubtitle(item.subject,schExportDate(item.date),schClock(item.start_minute)),
+      item.cancelled_at!=null?tr('Séance annulée')+' · '+item.cancel_reason:'',
       item.description,short&&item.short_exercise?item.short_exercise:item.exercise,
       item.due_date?tr('Date de remise')+' · '+schExportDate(item.due_date):''
     ].filter(Boolean).join('\n')

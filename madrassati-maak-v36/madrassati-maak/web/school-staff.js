@@ -285,6 +285,20 @@ function schSessionEditor(item,draft=item) {
       <button type="submit" class="btn primary">${item?'Enregistrer la séance':'Publier la séance'}</button></div></form>`);
 }
 
+function schSessionCancellationDialog(item) {
+  if(!item||schoolUI.data.account.role!=='administration')return;
+  const cancel=item.cancelled_at==null;
+  const title=cancel?'Annuler la séance':'Rétablir la séance';
+  schShowDialog(title,`<form class="form" data-school-form="session-cancellation"
+    data-id="${item.id}" data-revision="${item.revision}" data-cancel="${cancel}">
+    <div><h3>${schValue(item.title)}</h3>${schSessionMeta(item)}</div>
+    ${cancel?`<div><label for="schoolCancelReason">Motif de l’annulation</label>
+      <textarea id="schoolCancelReason" name="reason" maxlength="400" rows="3" dir="auto" required></textarea></div>`:''}
+    <p class="school-small school-muted">Le professeur, les élèves et leurs parents seront avertis dans leur espace.</p>
+    ${schError()}<div><button type="submit" class="btn ${cancel?'danger':'primary'}">${title}</button></div>
+    </form>`);
+}
+
 function schSessionValues(form) {
   const payload=new FormData(form);
   const [hour,minute]=String(payload.get('time')||'').split(':').map(Number);
@@ -638,6 +652,11 @@ function schStaffSubmit(form,button) {
     }
     case 'session':
       return schSaveSession(form,button);
+    case 'session-cancellation': {
+      const cancel=form.dataset.cancel==='true';
+      return schMutation(button,'/session/cancellation',{id:form.dataset.id,revision:Number(form.dataset.revision),cancel,reason:data.reason},
+        cancel?'La séance a été annulée.':'La séance a été rétablie.',{close:true});
+    }
     case 'period':
       return schMutation(button,'/period',{...schPeriodPayload(form),...data},'La période a été enregistrée.');
     case 'open-grades':
@@ -664,6 +683,7 @@ function schStaffAction(button) {
     if(member)return action==='account-edit'?schEditAccount(member):schArchiveAccount(member);
   }
   if(action==='open-grades')return schOpenGrades();
+  if(action==='session-cancellation')return schSessionCancellationDialog(schFindSession(id));
   if(action==='account-access'){
     const account=schoolUI.data.directory.accounts.find(a=>a.id===id);
     if(account)return schMutation(button,'/accounts/access',{id,revision:account.revision,active:!account.active},'Le statut du compte a été modifié.');

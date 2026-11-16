@@ -1,6 +1,6 @@
-.school-body:is([data-space="administration"],[data-space="professeur"]) {
+.school-body[data-space] {
   --side: 258px;
-  --staff-padding: 34px;
+  --workspace-padding: 34px;
   --navy: #203d37;
   --deep: #173c32;
   --text: #425c56;
@@ -12,21 +12,21 @@
   --blue-light: #edf4f7;
 }
 
-.school-body:is([data-space="administration"],[data-space="professeur"]) .school-main,
-.school-staff-topbar { margin-inline-start: var(--side); }
+.school-body[data-space] .school-main,
+.school-workspace-topbar { margin-inline-start: var(--side); }
 
-.school-body:is([data-space="administration"],[data-space="professeur"]) .school-main {
+.school-body[data-space] .school-main {
   max-inline-size: none;
   margin-inline-end: 0;
-  padding: 30px var(--staff-padding) 3rem;
+  padding: 30px var(--workspace-padding) 3rem;
 }
 
-.school-body:is([data-space="administration"],[data-space="professeur"]) #schoolApp {
+.school-body[data-space] #schoolApp {
   max-inline-size: 1530px;
   margin-inline: auto;
 }
 
-.school-staff-sidebar {
+.school-workspace-sidebar {
   left: auto;
   right: auto;
   inset-inline-start: 0;
@@ -36,11 +36,11 @@
   border-inline-end: 1px solid var(--line);
 }
 
-.school-staff-sidebar .brand { gap: 10px; padding-inline: 8px; }
-.school-staff-sidebar .brand img { inline-size: 36px; block-size: 41px; flex-shrink: 0; }
-.school-staff-sidebar .brand strong { font-size: 18px; font-weight: 750; }
-.school-staff-sidebar .brand small { margin-block-start: 5px; color: var(--muted); line-height: 1.5; }
-.school-staff-sidebar .side-kicker {
+.school-workspace-sidebar .brand { gap: 10px; padding-inline: 8px; }
+.school-workspace-sidebar .brand img { inline-size: 36px; block-size: 41px; flex-shrink: 0; }
+.school-workspace-sidebar .brand strong { font-size: 18px; font-weight: 750; }
+.school-workspace-sidebar .brand small { margin-block-start: 5px; color: var(--muted); line-height: 1.5; }
+.school-workspace-sidebar .side-kicker {
   align-self: flex-start;
   margin: 24px 10px 8px;
   padding: 4px 9px;
@@ -52,9 +52,9 @@
   color: #58705c;
 }
 
-.school-staff-sidebar .nav-list { gap: 0; }
-.school-staff-sidebar .nav-group { margin-block-start: 14px; }
-.school-staff-sidebar .nav-group-label {
+.school-workspace-sidebar .nav-list { gap: 0; }
+.school-workspace-sidebar .nav-group { margin-block-start: 14px; }
+.school-workspace-sidebar .nav-group-label {
   margin: 0 12px 8px;
   color: #627166;
   font-size: 10px;
@@ -62,7 +62,7 @@
   text-transform: uppercase;
   font-weight: 700;
 }
-.school-staff-sidebar .nav-item {
+.school-workspace-sidebar .nav-item {
   min-block-size: 43px;
   margin-block: 3px;
   padding: 10px 12px;
@@ -71,38 +71,67 @@
   color: #53655e;
   text-align: start;
 }
-.school-staff-sidebar .nav-item > .icon { color: #778c80; inline-size: 18px; block-size: 18px; flex-shrink: 0; }
-.school-staff-sidebar .nav-item:hover { background: #f3f6f1; color: #204f3d; }
-.school-staff-sidebar .nav-item.active { background: #e7f0e5; color: #285637; }
-.school-staff-sidebar .nav-item.active > .icon { color: #377344; }
-.school-staff-sidebar .nav-item.active::before { left: auto; right: auto; inset-inline-start: 0; background: #57855a; }
-.school-staff-sidebar .school-nav-count { margin-inline-start: auto; }
-.school-staff-menu-close { display: none; }
+.school-workspace-sidebar .nav-item > .icon { color: #778c80; inline-size: 18px; block-size: 18px; flex-shrink: 0; }
+.school-workspace-sidebar .nav-item:hover { background: #f3f6f1; color: #204f3d; }
+.school-workspace-sidebar .nav-item.active { background: #e7f0e5; color: #285637; }
+.school-workspace-sidebar .nav-item.active > .icon { color: #377344; }
+.school-workspace-sidebar .nav-item.active::before { left: auto; right: auto; inset-inline-start: 0; background: #57855a; }
+.school-workspace-sidebar .school-nav-count { margin-inline-start: auto; }
+.school-workspace-menu-close { display: none; }
 
-.school-staff-topbar {
+.school-workspace-topbar {
   block-size: auto;
   min-block-size: 78px;
-  padding: .7rem var(--staff-padding);
+  padding: .7rem var(--workspace-padding);
   border-color: var(--line);
 }
 
-.school-staff-topbar .school-staff-location,
-.school-staff-topbar .school-user {
+.school-workspace-topbar .school-workspace-location,
+.school-workspace-topbar .school-user {
   display: flex;
   align-items: center;
   gap: .55rem;
   min-inline-size: 0;
 }
-.school-staff-topbar .school-user { text-align: start; }
-.school-staff-topbar .school-user > .avatar { display: inline-flex; color: #476339; }
-.school-staff-topbar .school-user > div { max-inline-size: 180px; overflow-wrap: anywhere; }
-.school-staff-topbar .breadcrumb strong { color: #294f3d; }
-.school-staff-topbar .school-header-tools { gap: .5rem; }
-.school-staff-topbar .school-header-tools .btn { text-align: center; }
-.school-staff-topbar .breadcrumb .icon { flex-shrink: 0; }
+.school-workspace-topbar .school-user { text-align: start; }
+.school-workspace-topbar .school-user > .avatar { display: inline-flex; color: #476339; }
+.school-workspace-topbar .school-user-name { max-inline-size: 180px; overflow-wrap: anywhere; }
+.school-workspace-topbar .breadcrumb strong { color: #294f3d; }
+.school-workspace-topbar .school-header-tools { gap: .5rem; }
+.school-workspace-topbar .school-header-tools .btn { text-align: center; }
+.school-workspace-topbar .breadcrumb .icon { flex-shrink: 0; }
+.school-account-menu { position: relative; }
+.school-account-menu summary { display: flex; align-items: center; gap: .4rem; cursor: pointer; list-style: none; }
+.school-account-menu summary::-webkit-details-marker { display: none; }
+.school-account-menu summary:focus-visible { outline-offset: 4px; }
+.school-account-menu[open] summary > .icon { transform: rotate(180deg); }
+.school-account-actions { position: absolute; z-index: 3; inset-block-start: calc(100% + .55rem); inset-inline-end: 0;
+  display: grid; gap: .4rem; inline-size: max-content; max-inline-size: min(245px,86vw); padding: .65rem;
+  background: #fff; border: 1px solid var(--school-line); border-radius: 12px; box-shadow: 0 10px 30px #173c321f; }
 
-.school-body:is([data-space="administration"],[data-space="professeur"]) .school-title { margin-block-end: 23px; }
-.school-body:is([data-space="administration"],[data-space="professeur"]) h1 { font-size: clamp(1.5rem,2.5vw,1.88rem); }
+.school-home-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+.school-student-home { grid-template-columns: minmax(0,1.45fr) minmax(0,1fr); }
+.school-home-heading .school-child-picker { margin: 0; }
+.school-home-heading .school-meta { margin-block-start: .35rem; }
+.school-home-subjects { grid-template-columns: repeat(auto-fill,minmax(min(100%,130px),1fr)); }
+.school-study-entry { display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  flex-wrap: wrap; padding: .85rem; background: #eef6eb; border: 1px solid #dce9d9; border-radius: 12px; }
+.school-family-summary { display: grid; grid-template-columns: minmax(0,.72fr) minmax(0,1.6fr);
+  align-items: center; gap: .8rem; }
+.school-child-summary { display: flex; gap: .75rem; align-items: center; overflow-wrap: anywhere; }
+.school-child-summary .avatar { inline-size: 48px; block-size: 48px; flex: none; }
+.school-family-counters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .7rem; }
+.school-home-quick { display: flex; align-items: center; gap: .55rem; min-inline-size: 0; overflow-wrap: anywhere; }
+a.school-home-quick { padding: .65rem; color: var(--school-ink); border: 1px solid var(--school-line); border-radius: 10px; }
+a.school-home-quick:hover { background: #eff5ed; border-color: #a4c8aa; }
+.school-home-quick small { display: block; color: var(--school-muted); }
+.school-home-icon { inline-size: 2rem; block-size: 2rem; display: inline-grid; place-items: center; flex: none;
+  color: #346d50; border-radius: 9px; background: #e7f0e5; }
+.school-cancelled-note { background: #fbf5e8; border-color: #ecdcb7; }
+.school-cancelled-note p { white-space: pre-wrap; overflow-wrap: anywhere; margin-block-start: .3rem; }
+
+.school-body[data-space] .school-title { margin-block-end: 23px; }
+.school-body[data-space] h1 { font-size: clamp(1.5rem,2.5vw,1.88rem); }
 .school-body[data-space="administration"] .stat-card:hover { border-color: #94b39b; }
 .school-body[data-space="administration"] .stat-label { color: #52685d; }
 .school-body[data-space="administration"] .admin-enrolment .class-row { border-block-end: 1px solid var(--line); }
@@ -129,41 +158,44 @@
 .school-workspace-filters .search-box:focus-within { outline: 2px solid #397952; outline-offset: 2px; }
 .school-workspace-filters .search-box input:focus { outline: 0; }
 
-html[dir="rtl"] .school-staff-sidebar .side-kicker,
-html[dir="rtl"] .school-staff-sidebar .nav-group-label { letter-spacing: 0; }
-html[dir="rtl"] .school-staff-location .breadcrumb > .icon,
+html[dir="rtl"] .school-workspace-sidebar .side-kicker,
+html[dir="rtl"] .school-workspace-sidebar .nav-group-label { letter-spacing: 0; }
+html[dir="rtl"] .school-workspace-location .breadcrumb > .icon,
 html[dir="rtl"] .admin-task > .icon { transform: scaleX(-1); }
 
 @media (min-width: 1061px) {
   .school-admin-class-grid { grid-template-columns: minmax(220px,.62fr) minmax(0,1.38fr); }
 }
 @media (max-width: 1200px) {
-  .school-body:is([data-space="administration"],[data-space="professeur"]) { --side: 238px; --staff-padding: 24px; }
+  .school-body[data-space] { --side: 238px; --workspace-padding: 24px; }
 }
 @media (max-width: 1060px) {
   .school-body[data-space="administration"] .admin-directory-row:not(.admin-certificate-row) {
     grid-template-columns: minmax(0, 1fr) minmax(0, .7fr) auto;
   }
   .school-body[data-space="administration"] .school-admin-class-grid { grid-template-columns: minmax(0,1fr); }
-  .school-staff-topbar .school-header-tools .school-user { display: none; }
+  .school-workspace-topbar .school-header-tools .school-user { display: none; }
+  .school-workspace-topbar .school-account-menu .school-user { display: inline-flex; }
+  .school-workspace-topbar .school-account-menu .school-user-name { display: none; }
+  .school-home-grid, .school-family-summary { grid-template-columns: minmax(0,1fr); }
 }
 @media (min-width: 781px) and (max-width: 1040px) {
   .school-body[data-space="administration"] .admin-indicators { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 780px) {
-  .school-body:is([data-space="administration"],[data-space="professeur"]) { --side: min(258px,85vw); --staff-padding: 19px; }
-  .school-body:is([data-space="administration"],[data-space="professeur"]) .school-main,
-  .school-staff-topbar { margin-inline-start: 0; }
-  .school-body:is([data-space="administration"],[data-space="professeur"]) .school-main { padding-block-start: 23px; }
-  .school-staff-topbar { min-block-size: 67px; gap: .5rem; }
-  .school-staff-sidebar:not(.open) { visibility: hidden; }
-  html[dir="rtl"] .school-staff-sidebar:not(.open) { transform: translateX(100%); }
-  .school-staff-menu-close { display: inline-flex; align-self: flex-end; margin-block-end: .5rem; }
-  .school-staff-topbar .breadcrumb-space,
-  .school-staff-topbar .breadcrumb > .icon { display: none; }
+  .school-body[data-space] { --side: min(258px,85vw); --workspace-padding: 19px; }
+  .school-body[data-space] .school-main,
+  .school-workspace-topbar { margin-inline-start: 0; }
+  .school-body[data-space] .school-main { padding-block-start: 23px; }
+  .school-workspace-topbar { min-block-size: 67px; gap: .5rem; }
+  .school-workspace-sidebar:not(.open) { visibility: hidden; }
+  html[dir="rtl"] .school-workspace-sidebar:not(.open) { transform: translateX(100%); }
+  .school-workspace-menu-close { display: inline-flex; align-self: flex-end; margin-block-end: .5rem; }
+  .school-workspace-topbar .breadcrumb-space,
+  .school-workspace-topbar .breadcrumb > .icon { display: none; }
 }
 @media (max-width: 600px) {
-  .school-body:is([data-space="administration"],[data-space="professeur"]) { --staff-padding: 15px; }
+  .school-body[data-space] { --workspace-padding: 15px; }
   .school-body[data-space="administration"] .admin-directory-row:not(.admin-certificate-row) {
     grid-template-columns: minmax(0,1fr) auto;
   }
@@ -171,13 +203,17 @@ html[dir="rtl"] .admin-task > .icon { transform: scaleX(-1); }
   .school-workspace-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 460px) {
-  .school-staff-topbar [data-school-action="refresh"] { display: none; }
+  .school-workspace-topbar .school-header-tools > [data-school-action="refresh"] { display: none; }
+  .school-body:is([data-space="eleve"],[data-space="parent"]) .school-workspace-topbar .school-inbox-link > span:first-of-type {
+    position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .school-family-counters { grid-template-columns: minmax(0,1fr); }
 }
 @media (max-width: 370px) {
   .school-workspace-filters { grid-template-columns: minmax(0,1fr); }
 }
 @media print {
-  .school-body:is([data-space="administration"],[data-space="professeur"]) .school-main { margin: 0; padding: 0; }
+  .school-body[data-space] .school-main { margin: 0; padding: 0; }
 }
 
 .school-teacher-heading > div:first-child { min-inline-size: 0; overflow-wrap: anywhere; }
