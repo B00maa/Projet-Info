@@ -1,6 +1,7 @@
 const SCHOOL_FILE_LIMIT = 12*1024*1024;
 const SCHOOL_PACK_LIMIT = 32*1024*1024;
-const SCHOOL_SESSION_COLUMNS = `s.*,c.name AS class_name,a.name AS teacher_name`;
+const SCHOOL_SESSION_COLUMNS = `s.*,c.name AS class_name,a.name AS teacher_name,
+  EXISTS (SELECT 1 FROM school_session_quizzes q WHERE q.session_id=s.id) AS has_quiz`;
 
 function schoolSessionScope(account,child) {
   if (account.role === 'administration') return {where:'1',args:[]};
@@ -21,6 +22,13 @@ function schoolSessions(db,scope,condition,params,latest = false,limit=300) {
 function schoolSessionView(session) {
   const {file_key,file_name,file_type,file_size,...view} = session;
   return {...view,file:file_key ? {name:file_name,type:file_type,size:file_size} : null};
+}
+
+async function schoolSessionDetails(db,account,child,id) {
+  schoolRequire(schoolId(id),'Séance invalide.');
+  const [session]=await schoolSessions(db,schoolSessionScope(account,child),'s.id=?',[id]);
+  if(!session)throw new SchoolError(404,'Cette séance est introuvable.');
+  return session;
 }
 
 async function schoolUpcomingSessions(db,scope,limit) {
@@ -150,6 +158,9 @@ async function schoolSessionSave(env,account,request) {
   schoolRequire(!due || schoolDate(due),'La date du devoir est invalide.');
   const meeting = schoolOptionalUrl(values.meeting);
   const video = schoolOptionalUrl(values.video);
+  const following=values.applyFollowing==='1';
+  const series=values.repeatUntil||following?await schoolSeriesPlan(db,account,{date,due,start,duration,
+    repeatUntil:values.repeatUntil,following},existing,teaching):null;
   const upload = await schoolAttachment(form.get('support'));
   if (upload && !env.BUCKET) throw new SchoolError(503,'Le stockage des supports est indisponible.');
   const oldFile = existing && values.removeFile !== '1' && existing.file_key ? {
@@ -174,6 +185,13 @@ async function schoolSessionSave(env,account,request) {
   let saved = false;
   try {
     if (upload) await env.BUCKET.put(upload.key,upload.file,{httpMetadata:{contentType:upload.type}});
+    if(series) {
+      const savedId=await schoolSeriesSave(db,series,existing,{title,description,exercise,short_exercise:shortExercise,
+        meeting_url:meeting,video_url:video,file_key:attachment?.key??null,file_name:attachment?.name??null,
+        file_type:attachment?.type??null,file_size:attachment?.size??null},{movesClass,dropsHomework});
+      saved=true;
+      return savedId;
+    }
     const result = existing ?
       await schoolRun(db,`UPDATE school_sessions SET class_id=?,teacher_id=?,subject=?,title=?,date=?,
         start_minute=?,duration=?,description=?,exercise=?,short_exercise=?,due_date=?,meeting_url=?,video_url=?,
@@ -196,7 +214,9 @@ async function schoolSessionSave(env,account,request) {
   } finally {
     const unused = !saved ? upload?.key : existing?.file_key!==attachment?.key ? existing?.file_key : null;
     if (unused && env.BUCKET) {
-      try { await env.BUCKET.delete(unused); }
+      try {
+        if(!await schoolFirst(db,'SELECT id FROM school_sessions WHERE file_key=? LIMIT 1',[unused]))await env.BUCKET.delete(unused);
+      }
       catch { console.warn('School attachment cleanup failed'); }
     }
   }
