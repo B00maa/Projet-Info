@@ -83,6 +83,7 @@
   block-size: auto;
   min-block-size: 78px;
   padding: .7rem var(--workspace-padding);
+  gap: .65rem;
   border-color: var(--line);
 }
 
@@ -94,20 +95,27 @@
   min-inline-size: 0;
 }
 .school-workspace-topbar .school-user { text-align: start; }
-.school-workspace-topbar .school-user > .avatar { display: inline-flex; color: #476339; }
-.school-workspace-topbar .school-user-name { max-inline-size: 180px; overflow-wrap: anywhere; }
-.school-workspace-topbar .breadcrumb strong { color: #294f3d; }
-.school-workspace-topbar .school-header-tools { gap: .5rem; }
-.school-workspace-topbar .school-header-tools .btn { text-align: center; }
+.school-workspace-topbar .school-user > .avatar { display: inline-flex; flex: none; color: #476339; }
+.school-workspace-topbar .school-user-name { max-inline-size: min(15vw,160px); min-inline-size: 0; text-align: start; }
+.school-workspace-topbar .school-user-name strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.school-workspace-topbar .breadcrumb { min-inline-size: 0; }
+.school-workspace-topbar .breadcrumb strong { color: #294f3d; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.school-workspace-topbar .school-header-tools { gap: .55rem; flex-wrap: nowrap; flex: none; }
 .school-workspace-topbar .breadcrumb .icon { flex-shrink: 0; }
 .school-account-menu { position: relative; }
-.school-account-menu summary { display: flex; align-items: center; gap: .4rem; cursor: pointer; list-style: none; }
+.school-account-menu summary { display: flex; align-items: center; gap: .45rem; min-block-size: 44px; padding: .15rem .45rem;
+  border: 1px solid transparent; border-radius: 11px; cursor: pointer; list-style: none; }
+.school-account-menu summary:hover, .school-account-menu[open] summary { background: #f3f7f1; border-color: var(--school-line); }
 .school-account-menu summary::-webkit-details-marker { display: none; }
-.school-account-menu summary:focus-visible { outline-offset: 4px; }
 .school-account-menu[open] summary > .icon { transform: rotate(180deg); }
 .school-account-actions { position: absolute; z-index: 3; inset-block-start: calc(100% + .55rem); inset-inline-end: 0;
-  display: grid; gap: .4rem; inline-size: max-content; max-inline-size: min(245px,86vw); padding: .65rem;
+  display: grid; gap: .2rem; inline-size: max-content; max-inline-size: min(245px,86vw); padding: .38rem;
   background: #fff; border: 1px solid var(--school-line); border-radius: 12px; box-shadow: 0 10px 30px #173c321f; }
+.school-account-actions button { display: flex; align-items: center; gap: .55rem; min-block-size: 43px; inline-size: 100%;
+  padding: .45rem .67rem; color: var(--school-ink); background: transparent; border: 0; border-radius: 8px;
+  text-align: start; cursor: pointer; }
+.school-account-actions button:hover { background: #eff5ed; }
+.school-account-actions button .icon { flex: none; color: #38604e; }
 
 .school-home-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
 .school-student-home { grid-template-columns: minmax(0,1.45fr) minmax(0,1fr); }
@@ -174,8 +182,6 @@ html[dir="rtl"] .admin-task > .icon { transform: scaleX(-1); }
     grid-template-columns: minmax(0, 1fr) minmax(0, .7fr) auto;
   }
   .school-body[data-space="administration"] .school-admin-class-grid { grid-template-columns: minmax(0,1fr); }
-  .school-workspace-topbar .school-header-tools .school-user { display: none; }
-  .school-workspace-topbar .school-account-menu .school-user { display: inline-flex; }
   .school-workspace-topbar .school-account-menu .school-user-name { display: none; }
   .school-home-grid, .school-family-summary { grid-template-columns: minmax(0,1fr); }
 }
@@ -203,10 +209,10 @@ html[dir="rtl"] .admin-task > .icon { transform: scaleX(-1); }
   .school-workspace-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 460px) {
-  .school-workspace-topbar .school-header-tools > [data-school-action="refresh"] { display: none; }
-  .school-body:is([data-space="eleve"],[data-space="parent"]) .school-workspace-topbar .school-inbox-link > span:first-of-type {
-    position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
-  }
+  .school-workspace-topbar .school-header-tools { gap: .35rem; }
+  .school-account-menu summary { gap: .2rem; padding-inline: .15rem; }
+  .school-account-menu summary > .icon { display: none; }
+  .school-workspace-topbar .breadcrumb { font-size: .77rem; }
   .school-family-counters { grid-template-columns: minmax(0,1fr); }
 }
 @media (max-width: 370px) {

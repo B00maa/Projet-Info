@@ -130,6 +130,32 @@ function schFileLink(id,view=false,childId=schoolUI.data?.child?.id) {
   return SCHOOL_API+'/file/'+encodeURIComponent(id)+(params.size ? '?'+params : '');
 }
 
+function schClearWorkspaceRoute() {
+  const entry={...history.state};
+  delete entry.schoolAccount;
+  history.replaceState(entry,'',location.pathname+location.search);
+}
+
+function schResetWorkspace(clearRoute) {
+  clearTimeout(schoolUI.timer);
+  clearTimeout(schoolUI.toast);
+  schNode('schoolToast').classList.remove('visible');
+  if(schoolUI.editor?.kind==='grade') {
+    clearTimeout(schoolUI.editor.draftTimer);
+    schoolUI.editor.pendingScores=null;
+  }
+  schClearPreview();
+  Object.assign(schoolUI,{data:null,error:null,clock:null,dirty:false,week:'',child:'',peer:'',editor:null,credentials:null,
+    adminFilters:null,sidebarOpen:false,rosterQuery:'',resultFilters:{subject:'',from:'',to:''}});
+  if(schDialog().open)schDialog().close();
+  resetTeacherCoach();
+  resetAICoach();
+  if(clearRoute) {
+    schClearWorkspaceRoute();
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+}
+
 function schToast(text) {
   const toast=schNode('schoolToast');
   toast.textContent=tr(text);
@@ -166,15 +192,17 @@ async function schLoad({quiet=false}={}) {
   try {
     const data=await schRequest('/state?'+params);
     if(request!==schoolUI.request)return;
-    const unchanged=schoolUI.data && JSON.stringify({...data,now:0})===JSON.stringify({...schoolUI.data,now:0});
-    if(schoolUI.data?.account.id!==data.account.id) {
-      resetTeacherCoach();
-      resetAICoach();
-      schoolUI.adminFilters=null;
-      schoolUI.sidebarOpen=false;
-      schoolUI.rosterQuery='';
-      schoolUI.resultFilters={subject:'',from:'',to:''};
+    const account=data.account;
+    const previous=schoolUI.data?.account;
+    const entryAccount=history.state?.schoolAccount;
+    const changedAccount=previous&&(previous.id!==account.id||previous.role!==account.role||previous.auth!==account.auth);
+    if(changedAccount||(entryAccount&&entryAccount!==account.id)) {
+      schResetWorkspace(true);
+      schRender();
+      return schLoad();
     }
+    if(entryAccount!==account.id)history.replaceState({...history.state,schoolAccount:account.id},'');
+    const unchanged=schoolUI.data && JSON.stringify({...data,now:0})===JSON.stringify({...schoolUI.data,now:0});
     schoolUI.data=data;
     schoolUI.error=null;
     schoolUI.clock={now:data.now,at:performance.now()};
@@ -192,14 +220,16 @@ async function schLoad({quiet=false}={}) {
     } else schRender();
   } catch(error) {
     if(request!==schoolUI.request)return;
-    if(quiet && ![401,403].includes(error.status))return;
-    if(schDialog().open)schDialog().close();
-    resetTeacherCoach();
-    resetAICoach();
-    schoolUI.data=null;
+    if(error.status===404&&params.has('child')) {
+      schoolUI.child='';
+      return schLoad({quiet});
+    }
+    const signedOut=error.status===401||error.status===403;
+    if(quiet&&!signedOut)return;
+    schResetWorkspace(signedOut);
     schoolUI.error=error;
     schRender();
-    if([401,403].includes(error.status)&&schoolUI.setupState!=='complete') {
+    if(signedOut&&schoolUI.setupState!=='complete') {
       const info=await schRequest('/auth/info').catch(()=>null);
       if(request===schoolUI.request&&info) {
         schoolUI.setupState=info.setupState||(info.setupAvailable?'ready':'');
@@ -262,20 +292,50 @@ function schClearPreview() {
 function schAuth() {
   const error=schoolUI.error;
   const ready=error?.status===401||error?.status===403;
-  return `<section class="school-auth"><img src="/assets/family-learning-v3.webp" width="1100" height="733" alt="">
-    <div class="card school-stack"><h1>Espace scolaire</h1>
-    ${ready?`<form class="form" data-school-form="school-login">
-      <div><h2>Connexion scolaire</h2><p class="school-muted school-small">Utilisez les accès remis par votre établissement.</p></div>
-      <div><label for="schoolLoginId">Identifiant scolaire</label><input id="schoolLoginId" name="login" dir="ltr"
-        autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required></div>
-      <div><label for="schoolLoginCode">Mot de passe ou code personnel</label><input id="schoolLoginCode" type="password" name="code" dir="auto"
-        autocomplete="current-password" maxlength="256" required></div>
-      ${schError()}<div><button type="submit" class="btn primary">Se connecter à l’école</button></div></form>
-      <p class="school-muted school-small">Élèves, parents, professeurs et administration</p>
-      <div id="schoolSetupAction" ${schShowSetup()?'':'hidden'}><button type="button" class="btn secondary"
-        data-school-action="activate-administration">Activer l’administration</button></div>`:
-      `<p role="status">${schEsc(error?.message||'Chargement de l’espace scolaire…')}</p>`}
-    <div><a class="text-link" href="/">Explorer la maquette</a></div></div></section>`;
+  const audience=[['cap','Élève'],['users','Parent'],['book','Professeur'],['building','Administration']];
+  return `<section class="school-auth" aria-labelledby="schoolAuthTitle">
+    <div class="school-auth-welcome">
+      <p lang="ar" dir="rtl" class="school-auth-name" data-no-i18n="true">مدرستي معاك</p>
+      <p class="school-auth-motto">L’école à mes côtés</p>
+      <img src="/assets/family-learning-v3.webp" width="1100" height="733" alt="">
+      <ul class="school-auth-audience" aria-label="Profils scolaires">${audience.map(([symbol,label])=>
+        `<li>${siteIcon(symbol,'sm')}<span>${label}</span></li>`).join('')}</ul>
+    </div>
+    <div class="school-auth-card school-stack">
+      <div class="school-auth-heading"><span class="school-auth-lock">${siteIcon('lock')}</span>
+        <h1 id="schoolAuthTitle">Espace scolaire</h1>
+        ${ready?'<p class="school-muted">Connectez-vous avec les accès remis par votre établissement.</p>':''}
+      </div>
+      ${ready?`<form class="form school-auth-form" data-school-form="school-login">
+        <div><label for="schoolLoginId">Identifiant scolaire</label>
+          <input id="schoolLoginId" name="login" dir="ltr" autocomplete="username" autocapitalize="none"
+            spellcheck="false" maxlength="40" required></div>
+        <div><label for="schoolLoginCode">Mot de passe ou code personnel</label>
+          <div class="school-auth-password">
+            <input id="schoolLoginCode" type="password" name="code" dir="auto" autocomplete="current-password" maxlength="256" required>
+            <button type="button" class="school-header-icon" data-school-action="toggle-login-code" aria-controls="schoolLoginCode"
+              aria-label="Afficher le mot de passe" title="Afficher le mot de passe">${siteIcon('eye','sm')}</button>
+          </div></div>
+        ${schError()}<button type="submit" class="btn primary school-auth-submit"><span>Se connecter à l’école</span>${siteIcon('arrow','sm')}</button>
+      </form>`:`<p role="status" class="school-muted">${schEsc(error?.message||'Chargement de l’espace scolaire…')}</p>
+        ${error?'<div><button type="button" class="btn secondary" data-school-action="refresh">Réessayer</button></div>':''}`}
+      <div class="school-auth-footer">
+        <div id="schoolSetupAction" ${ready&&schShowSetup()?'':'hidden'}><button type="button" class="btn secondary small"
+          data-school-action="activate-administration">${siteIcon('settings','sm')}<span>Activer l’administration</span></button></div>
+        <a class="text-link" href="/">Explorer la maquette</a>
+      </div>
+    </div>
+  </section>`;
+}
+
+function schToggleLoginCode(button) {
+  const input=schNode('schoolLoginCode');
+  const visible=input.type==='password';
+  input.type=visible?'text':'password';
+  const label=tr(visible?'Masquer le mot de passe':'Afficher le mot de passe');
+  button.setAttribute('aria-label',label);
+  button.title=label;
+  button.innerHTML=siteIcon(visible?'eye-off':'eye','sm');
 }
 
 function schChildPicker(data) {
@@ -285,25 +345,30 @@ function schChildPicker(data) {
 }
 
 function schHeaderTools(data,workspace=false) {
-  const language=`<button type="button" class="btn secondary small" data-school-action="language"
-    aria-label="${state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe'}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button>`;
+  const languageLabel=state.lang==='ar'?'Afficher le site en français':'Afficher le site en arabe';
+  const language=`<button type="button" class="school-header-icon school-language" data-school-action="language"
+    aria-label="${languageLabel}" title="${languageLabel}"><span data-no-i18n="true">${state.lang==='ar'?'FR':'العربية'}</span></button>`;
   if(!data)return `<div class="school-header-tools">${language}</div>`;
   const {account}=data;
-  const user=`<span class="school-user">${workspace?schWorkspaceAvatar(account.name):''}
+  const user=`<span class="school-user">${schWorkspaceAvatar(account.name)}
     <span class="school-user-name"><strong>${schValue(account.name)}</strong>
       ${account.name!==SCHOOL_ROLE_NAMES[account.role]?'<small>'+SCHOOL_ROLE_NAMES[account.role]+'</small>':''}</span></span>`;
-  const notifications=account.passwordSetup?'':`<a class="btn secondary small school-inbox-link" href="#notifications" ${schPage()==='notifications'?'aria-current="page"':''}>
-    ${siteIcon('bell','sm')}<span>Notifications</span>${data.unreadNotifications?`<span class="school-nav-count" data-no-i18n="true">${data.unreadNotifications}</span>`:''}</a>`;
-  const refresh=account.passwordSetup?'':'<button type="button" class="btn secondary small" data-school-action="refresh">Actualiser</button>';
-  const password=schCanChangePassword(account)&&!account.passwordSetup?
-    '<button class="btn secondary small" type="button" data-school-action="change-password">Changer le mot de passe</button>':'';
-  const logout=account.auth==='school'?'<button class="btn secondary small" type="button" data-school-action="school-logout">Se déconnecter</button>':
-    '<a class="btn secondary small" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top">Se déconnecter</a>';
-  const learner=workspace&&['eleve','parent'].includes(account.role);
-  return `<div class="school-header-tools">${learner?`${language}${notifications}
-    <details class="school-account-menu"><summary aria-label="Menu du compte">${user}${siteIcon('chevron','sm')}</summary>
-      <div class="school-account-actions">${refresh}${password}${logout}</div></details>`:
-    user+notifications+refresh+password+logout+language}</div>`;
+  const count=data.unreadNotifications||0;
+  const notifications=`<a class="school-header-icon school-inbox-link" href="#notifications" aria-label="Notifications" title="Notifications"
+    ${schPage()==='notifications'?'aria-current="page"':''} ${count?'aria-describedby="schoolUnreadNotifications"':''}>
+    ${siteIcon('bell')}${count?`<span class="school-icon-count" aria-hidden="true">${count>99?'99+':count}</span>`:''}</a>
+    ${count?`<span class="sr-only" id="schoolUnreadNotifications">${schCountLabel(count,'notification non lue','notifications non lues')}</span>`:''}`;
+  const logoutLabel='aria-label="Se déconnecter" title="Se déconnecter"';
+  const logout=account.auth==='school'?`<button type="button" class="school-header-icon school-logout-icon"
+    data-school-action="school-logout" ${logoutLabel}>${siteIcon('logout')}</button>`:
+    `<a class="school-header-icon school-logout-icon" href="/signout-with-chatgpt?return_to=%2Fecole" target="_top"
+      data-school-action="external-logout" ${logoutLabel}>${siteIcon('logout')}</a>`;
+  return `<div class="school-header-tools">${language}${workspace?notifications:''}${logout}
+    ${workspace?`<details class="school-account-menu"><summary aria-label="Menu du compte" title="Menu du compte">
+      ${user}${siteIcon('chevron','sm')}</summary>
+      <div class="school-account-actions">${schCanChangePassword(account)?`<button type="button" data-school-action="change-password">
+        ${siteIcon('lock','sm')}<span>Changer le mot de passe</span></button>`:''}
+        <button type="button" data-school-action="refresh">${siteIcon('refresh','sm')}<span>Actualiser</span></button></div></details>`:''}</div>`;
 }
 
 function schRender() {
@@ -663,6 +728,8 @@ window.addEventListener('DOMContentLoaded',()=>{
       try { localStorage.setItem('madrassati-school-language',state.lang); } catch {}
       schRender();
     } else if(action==='refresh')schLoad();
+    else if(action==='toggle-login-code')schToggleLoginCode(button);
+    else if(action==='external-logout')schClearWorkspaceRoute();
     else if(action==='activate-administration'&&schShowSetup())schSetupDialog();
     else if(action==='download-codes'&&schDialog().open&&schoolUI.credentials)schCodesWorkbook();
     else if(!schoolUI.data)return;
@@ -694,6 +761,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   window.addEventListener('hashchange',()=>{
     if(!schoolUI.data)return;
     if(schoolUI.data.account.passwordSetup)return;
+    if(history.state?.schoolAccount&&history.state.schoolAccount!==schoolUI.data.account.id)schClearWorkspaceRoute();
     if(schDialog().open)schDialog().close();
     if(SCHOOL_SPACES[schoolUI.data.account.role]) {
       schoolUI.adminFilters=null;

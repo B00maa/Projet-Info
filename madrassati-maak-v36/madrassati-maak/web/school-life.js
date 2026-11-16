@@ -133,7 +133,7 @@ function schFamilyPage() {
   const data=schoolUI.data;
   const child=data.family.find(row=>row.id===data.child?.id);
   const heading=`<div class="school-title school-home-heading"><h1>Suivi de mon enfant</h1>
-    ${schChildPicker(data)}<a class="btn secondary" href="#messages">${siteIcon('mail','sm')}<span>Contacter les enseignants</span></a></div>`;
+    ${schChildPicker(data)}</div>`;
   if(!child)return heading+`<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`;
   const cards=[['a-rendre','clipboard','À rendre',data.homeworkCounts.pending],
     ['remis','file','Remis',data.homeworkCounts.submitted],['corriges','check','Corrigés',data.homeworkCounts.corrected]];
@@ -269,11 +269,28 @@ async function schSchoolAuth(form,button,setup=false) {
       schRender();
       schCredentialsDialog([{name:'Administration',...result.credential}]);
     } else {
-      schoolUI.child='';schoolUI.week='';schoolUI.peer='';
+      schResetWorkspace(true);
       await schLoad();
     }
   } catch(failure) { error.textContent=tr(failure.message); }
   finally { schoolUI.busy=false;button.disabled=false; }
+}
+
+async function schSchoolLogout(button) {
+  if(schoolUI.busy)return;
+  schoolUI.busy=true;
+  button.disabled=true;
+  try {
+    await schRequest('/auth/logout',{});
+    schResetWorkspace(true);
+    schRender();
+    await schLoad();
+    schNode('schoolLoginId')?.focus({preventScroll:true});
+  } catch(error) { schToast(error.message); }
+  finally {
+    schoolUI.busy=false;
+    if(button.isConnected)button.disabled=false;
+  }
 }
 
 function schLifeChange(target) {
@@ -321,8 +338,7 @@ function schLifeAction(button) {
   const {schoolAction:action,id,student,value,revision}=button.dataset;
   switch(action) {
     case 'school-logout':
-      schoolUI.child='';schoolUI.week='';schoolUI.peer='';
-      schMutation(button,'/auth/logout',{},null); break;
+      schSchoolLogout(button); break;
     case 'member-code': schMemberCodeDialog(id); break;
     case 'school-import': schImportDialog(); break;
     case 'import-template':

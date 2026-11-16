@@ -30,6 +30,30 @@
 .school-header-tools { justify-content: flex-end; }
 .school-user { text-align: end; line-height: 1.35; }
 .school-user small { display: block; color: var(--school-muted); font-size: .82rem; }
+.school-header-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--school-line);
+  border-radius: 11px;
+  background: #fff;
+  color: #38604e;
+  cursor: pointer;
+}
+.school-header-icon > .icon { inline-size: 19px; block-size: 19px; }
+.school-header-icon:hover, .school-header-icon[aria-current="page"] { background: #eaf3e7; border-color: #aac8ac; }
+.school-header-icon:focus-visible, .school-account-menu summary:focus-visible, .school-account-actions button:focus-visible {
+  outline: 2px solid #347753; outline-offset: 2px;
+}
+.school-header-icon:disabled { opacity: .5; cursor: wait; }
+.school-header-icon.school-language { inline-size: auto; min-inline-size: 44px; padding-inline: .6rem; font-size: .8rem; font-weight: 700; }
+.school-logout-icon:hover { background: #faf0ed; border-color: #e6ccc4; color: #8f4337; }
+.school-icon-count { position: absolute; inset-block-start: -.33rem; inset-inline-end: -.3rem; display: grid; place-items: center;
+  min-inline-size: 1.3rem; min-block-size: 1.3rem; padding-inline: .18rem; border: 2px solid #fff;
+  border-radius: 999px; background: #286047; color: #fff; font-size: .66rem; font-weight: 750; line-height: 1; }
 .school-main { max-inline-size: 1148px; margin-inline: auto; padding: clamp(1rem,4vw,2.5rem) 1rem 3rem; }
 .school-body h1, .school-body h2, .school-body h3 { color: var(--school-ink); }
 .school-body h1 { font-size: clamp(1.65rem,4vw,2.25rem); line-height: 1.2; }
@@ -39,8 +63,6 @@
 .school-title { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-block-end: 1rem; }
 .school-nav-count { display: inline-grid; place-items: center; min-inline-size: 1.4em; min-block-size: 1.4em; padding-inline: .25em;
   color: #fff; background: #285d42; border-radius: 999px; font-size: .78em; font-weight: 750; }
-.school-inbox-link { gap: .4rem; }
-.school-body .school-inbox-link[aria-current="page"] { background: #e4efe1; }
 .school-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; align-items: start; }
 .school-stack { display: grid; gap: .8rem; }
 .school-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .85rem; }
@@ -114,10 +136,38 @@
 .school-table-wrap { overflow-x: auto; }
 .school-form-note { min-block-size: 1.1rem; color: #a43e31; font-size: .85rem; }
 .school-form-note:empty { display: none; }
-.school-auth { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: center; gap: clamp(1rem,4vw,2.2rem); max-inline-size: 880px; margin: 1rem auto; }
-.school-auth img { inline-size: 100%; block-size: auto; }
-.school-auth .school-stack { gap: 1.15rem; }
-.school-auth .school-actions { gap: .55rem; }
+.school-auth { display: grid; grid-template-columns: minmax(0,1.06fr) minmax(0,1fr); max-inline-size: 990px;
+  margin: clamp(.15rem,2.6vw,1.75rem) auto; overflow: hidden; border: 1px solid #dbe8db; border-radius: 24px;
+  background: #fff; box-shadow: 0 16px 48px #234d3510; }
+.school-auth-welcome { display: grid; align-content: center; justify-items: center; gap: .5rem;
+  min-inline-size: 0; padding: clamp(1.35rem,3vw,2.3rem); text-align: center; color: #254b39;
+  background: radial-gradient(ellipse at 80% 24%,#fbf0d9 0,transparent 45%), linear-gradient(150deg,#eff7ee,#dcecdf); }
+.school-auth-welcome img { inline-size: 100%; max-inline-size: 460px; block-size: auto; align-self: center; }
+.school-auth-name { font-size: clamp(1.6rem,3vw,2.65rem); line-height: 1.12; font-weight: 750; }
+.school-auth-motto { font-size: .95rem; color: #426355; }
+.school-auth-audience { list-style: none; padding: 0; margin: .65rem 0 0; inline-size: 100%;
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .42rem; }
+.school-auth-audience li { display: flex; align-items: center; gap: .5rem; min-inline-size: 0; overflow-wrap: anywhere;
+  padding: .5rem .62rem; border: 1px solid #cddecf; border-radius: 9px; background: #ffffffa6; text-align: start;
+  font-size: .83rem; font-weight: 650; }
+.school-auth-audience li > .icon { flex: none; color: #44725a; }
+.school-auth-card { align-self: center; min-inline-size: 0; padding: clamp(1.45rem,4vw,3.25rem); gap: 1.25rem; }
+.school-auth-heading { display: grid; justify-items: start; gap: .55rem; }
+.school-auth-heading h1 { margin: 0; }
+.school-auth-heading p { max-inline-size: 33ch; line-height: 1.5; }
+.school-auth-lock { display: inline-grid; place-items: center; inline-size: 47px; block-size: 47px;
+  border-radius: 14px; background: #e8f2e7; color: #2b644a; margin-block-end: .2rem; }
+.school-auth-form input { min-block-size: 49px; }
+.school-auth-form label { font-weight: 650; }
+.school-auth-password { position: relative; }
+.school-auth-password input { padding-inline-end: 3.2rem; }
+.school-auth-password .school-header-icon { position: absolute; inset-inline-end: .2rem; inset-block-start: 50%;
+  transform: translateY(-50%); border-color: transparent; background: transparent; }
+.school-auth-password .school-header-icon:hover { background: #eaf3e7; }
+.school-auth-form .school-auth-submit { justify-content: space-between; gap: .75rem; min-block-size: 47px; inline-size: 100%; }
+.school-auth-footer { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem 1rem;
+  border-block-start: 1px solid var(--school-line); padding-block-start: 1rem; }
+html[dir="rtl"] .school-auth-submit .icon { transform: scaleX(-1); }
 .school-directory-tabs { margin-block-end: 1rem; }
 .school-class-directory li { flex-wrap: wrap; }
 .school-class-directory li > strong { min-inline-size: 5rem; }
@@ -126,7 +176,6 @@
 .school-student-coach .coach-ai-form .btn { flex-shrink: 0; }
 .school-student-coach .coach-ai-form textarea { flex: 1 1 auto; }
 .school-student-coach .coach-ai-note { font-size: .82rem; }
-.school-login-link { display: flex; justify-content: center; margin-block-start: .75rem; }
 .school-period { background: #f0f5ed; border-color: #d9e6d8; }
 .school-period[role="status"] { margin-block-end: 1rem; }
 .school-callout { padding: .8rem 1rem; margin-block-end: 1rem; border-radius: 13px; border: 1px solid #d5e5d5; background: #eaf3e8; }
@@ -162,10 +211,11 @@
 
 @media (max-width: 690px) {
   .school-grid, .school-auth, .school-message-layout { grid-template-columns: minmax(0,1fr); }
-  .school-auth img { max-block-size: 185px; object-fit: contain; }
+  .school-auth { max-inline-size: 535px; }
+  .school-auth-card { grid-row: 1; }
+  .school-auth-welcome img { max-block-size: 166px; object-fit: contain; }
   .school-brand strong { font-size: .95rem; }
   .school-header { padding-inline: .8rem; }
-  .school-header-tools .school-user { display: none; }
 }
 @media (max-width: 480px) {
   .school-header { flex-wrap: wrap; gap: .5rem; }
