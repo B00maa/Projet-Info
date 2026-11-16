@@ -19,9 +19,9 @@ function schCoursesPage() {
   const current=groups.get(subject);
   if(current)return `<div class="school-title"><h1>${schValue(subject)}</h1>
     <a class="btn secondary" href="#cours">Toutes les matières</a></div>
-    <section class="card school-stack">${current.map(item=>schSessionRow(item,false,true,true)).join('')}</section>`;
-  return `<div class="school-title"><h1>${data.account.role==='eleve'?'Mes matières':'Mes cours'}</h1>${data.account.role==='professeur'?
-    `<button type="button" class="btn primary" data-school-action="edit-session" data-kind="course" ${data.directory.classes.length?'':'disabled'}>Publier un cours</button>`:''}</div>
+    <section class="card school-stack">${current.map(item=>schChapterRow(item)).join('')}</section>`;
+  return `<div class="school-title"><h1>${data.account.role==='eleve'?'Mes parcours':'Mes cours'}</h1>${data.account.role==='professeur'?
+    `<button type="button" class="btn primary" data-school-action="edit-session" data-kind="course" ${data.directory.classes.length?'':'disabled'}>Publier un chapitre</button>`:''}</div>
     ${groups.size?`<div class="school-card-grid">${[...groups].sort(([a],[b])=>a.localeCompare(b,'fr')).map(([subject,items])=>
       schCourseSubjectTile(subject,items.length)).join('')}</div>`:
       `<section class="card">${schEmpty('Aucun cours publié.')}</section>`}`;
@@ -41,7 +41,7 @@ function schLibraryPage() {
   return `<div class="school-title"><h1>Bibliothèque</h1>${teacher?
     `<button class="btn primary" type="button" data-school-action="resource" ${data.directory.classes.length?'':'disabled'}>Ajouter une ressource</button>`:''}</div>
     <div class="school-stack">
-    <section class="card school-stack"><h2>${data.account.role==='administration'?'Ressources des classes':'Ressources de la classe'}</h2>
+    <section class="card school-stack"><h2>${data.account.role==='administration'?'Ressources des niveaux':'Ressources du niveau'}</h2>
       ${resources.length?resources.map(item=>{
         const link=schSafeLink(item.link);
         const file=schFamilyParams({id:item.id});
@@ -54,8 +54,8 @@ function schLibraryPage() {
           <div class="school-actions">${item.file?`<a class="btn secondary small" href="${schEsc(SCHOOL_API+'/resource/file?'+file)}">${schValue(item.file.name)}</a>`:''}
             ${link?`<a class="btn secondary small" href="${schEsc(link)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:''}</div></article>`;
       }).join(''):schEmpty('Aucune ressource ajoutée.')}</section>
-    <section class="card school-stack"><h2>Supports des séances</h2>
-      ${supports.length?supports.map(item=>schSessionRow(item)).join(''):schEmpty('Aucun support de séance.')}</section></div>`;
+    <section class="card school-stack"><h2>Supports des chapitres</h2>
+      ${supports.length?supports.map(item=>schChapterRow(item)).join(''):schEmpty('Aucun support de chapitre.')}</section></div>`;
 }
 
 function schResourceEditor(item) {
@@ -66,7 +66,7 @@ function schResourceEditor(item) {
     <div class="school-fields">
       <div><label for="schoolResourceTitle">Titre</label><input id="schoolResourceTitle" name="title" maxlength="120"
         value="${schEsc(item?.title)}" required></div>
-      <div><label for="schoolResourceClass">Classe</label><select name="class" id="schoolResourceClass" required>
+      <div><label for="schoolResourceClass">Niveau</label><select name="class" id="schoolResourceClass" required>
         ${classes.map(row=>schOpt(row.id,row.name+' · '+row.subject,item?.class_id)).join('')}</select></div>
       <div class="school-full"><label for="schoolResourceDescription">Description</label><textarea id="schoolResourceDescription"
         name="description" maxlength="3000" dir="auto">${schEsc(item?.description)}</textarea></div>
@@ -99,9 +99,9 @@ function schHomeworkPage() {
   const selected=filters.find(([key])=>key===filter);
   const homework=(data.homework||[]).filter(item=>!selected||selected[2](item));
   if(!teacher)homework.sort((a,b)=>Number(!!a.submitted_at)-Number(!!b.submitted_at)||
-    (a.submitted_at?b.due_date.localeCompare(a.due_date):a.due_date.localeCompare(b.due_date)));
-  return `<div class="school-title"><h1>${teacher?'Devoirs de mes classes':parent?'Ses devoirs':'Mes devoirs'}</h1>${teacher?
-    `<button class="btn primary" type="button" data-school-action="edit-session" ${data.directory.classes.length?'':'disabled'}>Nouvelle séance avec devoir</button>`:''}</div>
+    (a.submitted_at?(b.due_date||'').localeCompare(a.due_date||''):(a.due_date||'').localeCompare(b.due_date||'')));
+  return `<div class="school-title"><h1>${teacher?'Devoirs à corriger':parent?'Ses devoirs':'Mes devoirs'}</h1>${teacher?
+    `<button class="btn primary" type="button" data-school-action="edit-session" ${data.directory.classes.length?'':'disabled'}>Nouveau chapitre avec devoir</button>`:''}</div>
     ${filters.length?`<nav class="school-actions school-directory-tabs" aria-label="État des devoirs">
       <a class="btn ${selected?'secondary':'primary'} small" href="#devoirs" ${selected?'':'aria-current="page"'}>Tous les devoirs</a>
       ${filters.map(([key,label])=>`<a class="btn ${key===filter?'primary':'secondary'} small" href="#devoirs?etat=${key}"
@@ -109,7 +109,7 @@ function schHomeworkPage() {
     ${schFatigueBanner()}<section class="card school-stack">${homework.length?homework.map(item=>
       `<article class="school-session"><div class="school-session-top"><div><h2>${schValue(item.title)}</h2>
       <div class="school-meta">${schValue(item.subject+' · '+item.class_name)}
-      <span>·</span><span>Date de remise</span> ${schValue(schDate(item.due_date))}</div></div>
+      ${item.due_date?`<span>Date de remise</span> ${schValue(schDate(item.due_date))}`:''}</div></div>
       <div class="school-actions">${teacher?`<span class="school-small"><span>Remises</span> ${schValue(item.submitted+' / '+item.total)}
         <span>· Corrigés</span> ${schValue(item.corrected)}</span>`:schHomeworkStatus(item)}
         <button class="btn secondary small" type="button" data-school-action="homework" data-id="${item.id}">
@@ -132,7 +132,7 @@ function schHomeworkView({session,submissions},childId) {
   const short=!!session.short_exercise&&(entry?.variant==='short'||(!entry&&schFatigueCurrent()?.status==='approved'));
   const instruction=short?session.short_exercise:session.exercise;
   const task=`<div class="school-stack"><h3>${schValue(session.title)}</h3>${schSessionMeta(session)}
-    <p class="school-small"><span>Date de remise</span> · ${schValue(schDate(session.due_date))}</p>
+    ${session.due_date?`<p class="school-small"><span>Date de remise</span> · ${schValue(schDate(session.due_date))}</p>`:''}
     <section class="school-block"><h3>${short?'Exercice en version courte':'Consigne du devoir'}</h3>
       <p data-no-i18n="true" dir="auto">${schEsc(instruction)}</p></section>
     ${teacher&&session.short_exercise?`<section class="school-block"><h3>Exercice en version courte</h3>

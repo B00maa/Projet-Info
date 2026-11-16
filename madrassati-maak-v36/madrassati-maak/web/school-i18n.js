@@ -268,3 +268,48 @@ const SCHOOL_LIFE_AR={
 };
 
 for(const [fr,ar] of Object.entries(SCHOOL_LIFE_AR))AR_LOOKUP.set(localeKey(fr),ar);
+
+const SCHOOL_PATH_AR={
+  'Niveaux scolaires':'المستويات الدراسية','Niveau scolaire':'المستوى الدراسي','Niveau':'المستوى',
+  'Mes niveaux':'مستوياتي','Nouveau niveau':'مستوى جديد','Gérer les niveaux':'إدارة المستويات',
+  'Tous les niveaux':'جميع المستويات','Niveaux enseignés':'المستويات التي يدرسها الأستاذ',
+  'Filière (facultatif)':'الشعبة (اختياري)','Créer le niveau':'إنشاء المستوى',
+  'Niveaux de l’établissement':'مستويات المؤسسة','Effectifs par niveau':'عدد التلاميذ في كل مستوى',
+  'Voir tous les niveaux':'عرض جميع المستويات','Exporter les niveaux':'تصدير المستويات',
+  'Mes parcours':'مساراتي','Mon parcours':'مساري','Revoir une notion':'مراجعة مفهوم',
+  'Aucun chapitre n’est disponible pour ton niveau.':'لا توجد فصول متاحة لمستواك.',
+  'Les questions à revoir apparaissent après un quiz.':'تظهر أسئلة المراجعة بعد الاختبار.',
+  'Tous tes chapitres sont terminés.':'أكملت كل الفصول.',
+  'Continuer':'متابعة','Relire le chapitre':'إعادة قراءة الفصل','Reprendre le quiz':'متابعة الاختبار',
+  'Ouvrir le chapitre':'فتح الفصل','Publier un chapitre':'نشر فصل','Publier le chapitre':'نشر الفصل',
+  'Modifier le chapitre':'تعديل الفصل','Enregistrer le chapitre':'حفظ الفصل',
+  'Titre du chapitre':'عنوان الفصل','Contenu du cours':'محتوى الدرس','Support du chapitre':'دعامة الفصل',
+  'Supports des chapitres':'دعامات الفصول','Date de remise facultative':'أجل التسليم اختياري',
+  'Aucun chapitre publié.':'لا يوجد فصل منشور.','Chapitre terminé':'فصل مكتمل',
+  'Marquer terminé':'وضع علامة مكتمل','Terminé':'مكتمل','En cours':'قيد الإنجاز',
+  'Demander de l’aide':'طلب المساعدة','Ta question au professeur':'سؤالك للأستاذ','Envoyer la question':'إرسال السؤال',
+  'Question envoyée.':'أُرسل السؤال.','Voir la progression':'عرض التقدّم',
+  'Progression':'التقدّم','Progression des élèves':'تقدّم التلاميذ',
+  'Évaluations à rendre':'التقييمات المطلوب تسليمها','Voir les évaluations':'عرض التقييمات',
+  'Aucune évaluation à rendre.':'لا يوجد تقييم مطلوب تسليمه.','Ouvrir mes cours':'فتح دروسي',
+  'Mes cours et évaluations':'دروسي وتقييماتي','Gérer les évaluations':'إدارة التقييمات',
+  'Devoirs à corriger':'الواجبات المطلوب تصحيحها','Nouveau chapitre avec devoir':'فصل جديد مع واجب',
+  'Ouverture des remises':'بداية التسليم','Fin des remises':'نهاية التسليم','Date limite':'آخر أجل',
+  'Durée en minutes (facultatif)':'المدة بالدقائق (اختياري)',
+  'Le minuteur démarre quand l’élève clique sur Commencer.':'يبدأ العد عند نقر التلميذ على ابدأ.',
+  'Sujet et consignes':'الموضوع والتعليمات','Barème sur 20':'سلم التنقيط من 20',
+  'À venir':'قادم','Délai terminé':'انتهى الأجل','Voir les copies':'عرض الأجوبة',
+  'Copies des élèves':'أجوبة التلاميذ','Corriger la copie':'تصحيح الإجابة','Prolonger le délai':'تمديد الأجل',
+  'Note proposée sur 20':'النقطة المقترحة من 20','Nouvelle date limite':'آخر أجل جديد',
+  'Minutes supplémentaires':'دقائق إضافية','Commencer':'ابدأ','Reprendre':'متابعة',
+  'Joindre une copie':'إرفاق الإجابة','Télécharger la copie':'تنزيل الإجابة',
+  'Enregistrer le brouillon':'حفظ المسودة','Rendre ma copie':'تسليم إجابتي','Temps restant':'الوقت المتبقي',
+  'Commentaire du professeur':'ملاحظة الأستاذ','Résultats publiés':'النتائج المنشورة',
+  'Ajoute du contenu, une vidéo ou un support au chapitre.':'أضف محتوى أو فيديو أو دعامة للفصل.',
+  'La copie a changé ou le délai est terminé. Rouvre l’évaluation.':'تغيّرت الإجابة أو انتهى الأجل. أعد فتح التقييم.',
+  'Joins une copie PDF, JPEG ou PNG valide.':'أرفق إجابة بصيغة PDF أو JPEG أو PNG.',
+  'Écris ta réponse ou joins une copie.':'اكتب إجابتك أو أرفق ورقة الإجابة.',
+  'PDF, JPEG ou PNG · 6 Mo maximum':'PDF أو JPEG أو PNG · الحد الأقصى 6 ميغابايت'
+};
+
+for(const [fr,ar] of Object.entries(SCHOOL_PATH_AR))AR_LOOKUP.set(localeKey(fr),ar);

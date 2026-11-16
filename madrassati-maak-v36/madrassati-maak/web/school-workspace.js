@@ -1,26 +1,23 @@
 'use strict';
 
 const SCHOOL_ADMIN_GROUPS=[
-  ['Pilotage',[['dashboard','home'],['planning','calendar'],['absences','clipboard']]],
-  ['Scolarité',[['classes','cap'],['eleves','users'],['professeurs','user'],['parents','users'],['notes','chart'],['evaluations','edit'],['comptes','shield']]],
-  ['Outils',[['historique','clipboard'],['bibliotheque','folder'],['statistiques','chart'],['messages','mail'],['annonces','bell'],['parametres','settings']]]
+  ['Pilotage',[['dashboard','home'],['classes','cap'],['statistiques','chart']]],
+  ['Scolarité',[['eleves','users'],['professeurs','user'],['parents','users'],['evaluations','edit'],['notes','chart'],['comptes','shield']]],
+  ['Outils',[['historique','clipboard'],['bibliotheque','folder'],['messages','mail'],['annonces','bell'],['parametres','settings']]]
 ];
 
 const SCHOOL_SPACES={
   administration:{title:'Espace administration',label:'Navigation de l’administration',groups:SCHOOL_ADMIN_GROUPS},
   professeur:{title:'Espace professeur',label:'Navigation du professeur',groups:[
-    ['Mes classes et élèves',[['dashboard','home'],['messages','mail'],['classes','users'],['eleves','user'],['notes','chart'],['evaluations','edit']]],
-    ['Mon organisation',[['planning','calendar'],['presences','clipboard'],['cours','book'],['coach','robot'],
-      ['devoirs','file'],['bibliotheque','folder'],['annonces','bell']]]
+    ['Apprentissage',[['dashboard','home'],['cours','book'],['progression','chart'],['devoirs','clipboard'],['evaluations','edit'],['notes','chart']]],
+    ['Échanges et ressources',[['classes','cap'],['eleves','users'],['messages','mail'],['coach','robot'],['bibliotheque','folder'],['annonces','bell']]]
   ]},
   eleve:{title:'Espace élève',label:'Navigation de l’élève',groups:[
-    ['Mon apprentissage',[['aujourdhui','home'],['cours','book'],['devoirs','clipboard'],['evaluations','edit'],['notes','chart'],['coach','robot']]],
-    ['Mon quotidien',[['planning','calendar'],['rattrapage','clock'],['absences','clipboard'],['bibliotheque','folder'],
-      ['messages','mail'],['fatigue','heart'],['annonces','bell']]]
+    ['Mon apprentissage',[['aujourdhui','home'],['cours','book'],['revoir','clipboard'],['devoirs','file'],['evaluations','edit'],['notes','chart']]],
+    ['Échanges et ressources',[['messages','mail'],['coach','robot'],['bibliotheque','folder'],['fatigue','heart'],['annonces','bell']]]
   ]},
   parent:{title:'Espace parent',label:'Navigation du parent',groups:[
-    ['Le suivi scolaire',[['famille','home'],['planning','calendar'],['devoirs','clipboard'],['rattrapage','clock'],['notes','chart'],
-      ['absences','clipboard'],['evaluations','edit'],['semaine','file']]],
+    ['Le suivi scolaire',[['famille','home'],['progression','chart'],['devoirs','clipboard'],['evaluations','edit'],['notes','chart']]],
     ['Échanges et ressources',[['messages','mail'],['bibliotheque','folder'],['fatigue','heart'],['annonces','bell']]]
   ]}
 };

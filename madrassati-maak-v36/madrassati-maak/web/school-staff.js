@@ -97,7 +97,7 @@ function schAccountsPage() {
       <button class="btn primary" type="button" data-school-action="new-account" data-value="${view.role}" ${noClasses||noStudents?'disabled':''}>
         ${siteIcon('plus','sm')} ${view.action}</button>
     </div></div>
-    ${noClasses?`<p class="school-note"><a href="#classes" class="text-link">Créer une classe</a></p>`:''}
+    ${noClasses?`<p class="school-note"><a href="#classes" class="text-link">Créer un niveau</a></p>`:''}
     ${noStudents?`<p class="school-note">Inscris d’abord un élève pour pouvoir lui associer un parent.
       <a href="#eleves" class="text-link">Voir les élèves inscrits</a></p>`:''}
     <section class="card admin-directory">
@@ -109,9 +109,9 @@ function schAccountsPage() {
           <select id="schoolDirectoryRole" data-school-directory="role" aria-controls="schoolDirectoryResults">
             ${[['','Tous les rôles'],['eleve','Élève'],['professeur','Professeur'],['parent','Parent']].map(([value,label])=>schOpt(value,label,role)).join('')}
           </select></div>`:''}
-        ${students?`<div class="filter-field"><label for="schoolDirectoryClass">Classe</label>
+        ${students?`<div class="filter-field"><label for="schoolDirectoryClass">Niveau</label>
           <select id="schoolDirectoryClass" data-school-directory="classId" aria-controls="schoolDirectoryResults">
-            ${schOpt('','Toutes les classes',classId)}${directory.classes.map(entry=>schOpt(entry.id,entry.name,classId)).join('')}
+            ${schOpt('','Tous les niveaux',classId)}${directory.classes.map(entry=>schOpt(entry.id,entry.name,classId)).join('')}
           </select></div>`:''}
         <div class="filter-field"><label for="schoolDirectoryStatus">Statut du compte</label>
           <select id="schoolDirectoryStatus" data-school-directory="status" aria-controls="schoolDirectoryResults">
@@ -145,8 +145,8 @@ function schRoleInputs(role) {
 
 function schStudentClassField(selected='') {
   const {classes}=schoolUI.data.directory;
-  return `<div><label for="schoolStudentClass">Classe</label>
-    <select id="schoolStudentClass" name="studentClass" required>${schOpt('','Choisis une classe',selected)}
+  return `<div><label for="schoolStudentClass">Niveau</label>
+    <select id="schoolStudentClass" name="studentClass" required>${schOpt('','Choisis un niveau',selected)}
       ${classes.map(c=>schOpt(c.id,c.name,selected)).join('')}</select></div>`;
 }
 
@@ -155,7 +155,7 @@ function schTeacherClassesFields(assignments=[]) {
   const subject=assignments.find(row=>row.subject?.trim())?.subject;
   return `<div><label for="schoolSubject">Matière</label><select id="schoolSubject" name="subject"
     ${assignments.length?'required':''}>${schSubjectOptions(subject)}</select></div>
-    <fieldset class="school-choices"><legend>Classes enseignées</legend>${classes.length?classes.map(c=>
+    <fieldset class="school-choices"><legend>Niveaux enseignés</legend>${classes.length?classes.map(c=>
       `<label><input type="checkbox" name="teacherClass" value="${c.id}" ${assignments.some(row=>row.id===c.id)?'checked':''}>
         <span>${schValue(c.name)}</span></label>`).join(''):
       schEmpty('Crée une classe pour commencer.')}</fieldset>`;
@@ -229,44 +229,23 @@ function schStaffClasses(teacher) {
 }
 
 function schSessionEditor(item,draft=item) {
-  const data=schoolUI.data;
-  const admin=data.account.role==='administration';
-  const teachers=admin?data.directory.accounts.filter(a=>a.role==='professeur' && a.active && schStaffClasses(a.id).length):[];
-  const match=(member,subject)=>schStaffClasses(member.id).some(row=>row.id===item?.class_id&&(!subject||row.subject===subject));
-  const teacher=admin?(teachers.find(a=>a.id===item?.teacher_id&&match(a))||teachers.find(a=>match(a,item?.subject))||
-    teachers.find(a=>match(a))||teachers[0])?.id:data.account.id;
-  const classes=schStaffClasses(teacher);
-  if(!teacher || !classes.length)return schToast('Attribue une classe à un professeur avant de publier.');
-  const today=schDay(schNow());
-  const week=schoolUI.data.week;
-  const defaultDate=today>=week.start&&today<=week.end ? today : week.start;
-  schoolUI.editor={kind:'session',item};
-  const title=item?'Modifier la séance':draft?.kind==='course'?'Ajouter un cours':'Nouvelle séance';
-  schShowDialog(title,`<form class="form" id="schoolSessionForm" data-school-form="session">
+  const classes=schStaffClasses(schoolUI.data.account.id);
+  if(!classes.length)return schToast('Attribue un niveau au professeur avant de publier.');
+  schoolUI.editor={kind:'chapter',item};
+  schShowDialog(item?'Modifier le chapitre':'Publier un chapitre',`<form class="form" data-school-form="chapter"
+    data-id="${schEsc(item?.id)}" data-revision="${item?.revision||0}">
     <div class="school-fields">
-      <div class="school-full"><label for="schoolSessionTitle">Titre</label>
+      <div class="school-full"><label for="schoolSessionTitle">Titre du chapitre</label>
         <input name="title" id="schoolSessionTitle" value="${schEsc(draft?.title)}" maxlength="120" required></div>
-      ${admin?`<div><label for="schoolSessionTeacher">Professeur</label><select name="teacher" id="schoolSessionTeacher" required>
-        ${teachers.map(a=>schOpt(a.id,a.name,teacher)).join('')}</select></div>`:''}
-      <div><label for="schoolSessionClass">Classe</label><select name="class" id="schoolSessionClass" required>
-        ${item?schOpt('','Choisis une classe',classes.some(c=>c.id===item.class_id)?item.class_id:''):''}
-        ${classes.map(c=>schOpt(c.id,c.name+' · '+c.subject,draft?.class_id)).join('')}</select></div>
-      <div><label for="schoolSessionDate">Date de la séance</label>
-        <input type="date" name="date" id="schoolSessionDate" value="${item?.date||defaultDate}" required></div>
-      <div><label for="schoolSessionTime">Heure de début</label>
-        <input type="time" name="time" id="schoolSessionTime" value="${schClock(item?.start_minute??540)}" required></div>
-      <div><label for="schoolSessionDuration">Durée en minutes</label>
-        <input type="number" name="duration" id="schoolSessionDuration" value="${draft?.duration??45}" min="1" max="1440" required></div>
-      <div class="school-full">
-        <button class="btn secondary" type="button" data-school-action="slots">Proposer des créneaux</button>
-        <div class="school-stack school-note" id="schoolSlots" role="status"></div>
-      </div>
-      ${admin?schSeriesFields(item):''}
-      <div class="school-full"><label for="schoolSessionDescription">Consigne</label>
+      ${item?`<input type="hidden" name="class" value="${schEsc(item.class_id)}">
+        <p class="school-meta">${schValue(item.class_name+' · '+item.subject)}</p>`:
+        `<div><label for="schoolSessionClass">Niveau</label><select name="class" id="schoolSessionClass" required>
+        ${classes.map(c=>schOpt(c.id,c.name+' · '+c.subject,draft?.class_id)).join('')}</select></div>`}
+      <div class="school-full"><label for="schoolSessionDescription">Contenu du cours</label>
         <textarea name="description" id="schoolSessionDescription" maxlength="${TEACHER_LESSON_PUBLISH_LIMIT}">${schEsc(draft?.description)}</textarea></div>
-      <div><label for="schoolMeeting">Lien de la séance</label><input type="url" name="meeting" id="schoolMeeting" value="${schEsc(item?.meeting_url)}" placeholder="https://"></div>
-      <div><label for="schoolVideo">Lien vidéo</label><input type="url" name="video" id="schoolVideo" value="${schEsc(item?.video_url)}" placeholder="https://"></div>
-      <div class="school-full"><label for="schoolSupport">Support de la séance</label>
+      <div><label for="schoolVideo">Lien vidéo</label>
+        <input type="url" name="video" id="schoolVideo" value="${schEsc(item?.video_url)}" placeholder="https://"></div>
+      <div><label for="schoolSupport">Support du chapitre</label>
         <input type="file" id="schoolSupport" name="support" accept="application/pdf,video/mp4,video/webm,.pdf,.mp4,.webm">
         <p class="school-small school-muted">PDF, MP4 ou WebM · 12 Mo maximum</p>
         ${item?.file?`<label class="school-small"><input type="checkbox" name="removeFile" value="1"> Retirer le support actuel · ${schValue(item.file.name)}</label>`:''}</div>
@@ -275,89 +254,30 @@ function schSessionEditor(item,draft=item) {
       <details class="school-full school-details" ${item?.short_exercise?'open':''}><summary>Version courte du devoir (mode fatigue)</summary>
         <label for="schoolShortExercise">Consigne courte</label>
         <textarea name="shortExercise" id="schoolShortExercise" maxlength="2000">${schEsc(item?.short_exercise)}</textarea></details>
-      <div><label for="schoolDue">Date de remise</label>
+      <div><label for="schoolDue">Date de remise facultative</label>
         <input type="date" name="due" id="schoolDue" value="${item?.due_date||''}"></div>
     </div>
-    <p class="school-small school-muted">Les horaires du planning utilisent l’heure du Maroc.</p>
-    <section id="schoolSessionPreview" class="card school-stack" tabindex="-1" hidden></section>
-    ${schError()}<div class="school-actions">
-      <button type="button" class="btn secondary" data-school-action="preview-session">Aperçu élève</button>
-      <button type="submit" class="btn primary">${item?'Enregistrer la séance':'Publier la séance'}</button></div></form>`);
+    <section class="card school-stack" id="schoolChapterPreview" tabindex="-1" hidden></section>
+    ${schError()}<div class="school-actions"><button type="button" class="btn secondary" data-school-action="preview-chapter">Aperçu élève</button>
+      <button type="submit" class="btn primary">${item?'Enregistrer le chapitre':'Publier le chapitre'}</button></div></form>`);
 }
 
-function schSessionCancellationDialog(item) {
-  if(!item||schoolUI.data.account.role!=='administration')return;
-  const cancel=item.cancelled_at==null;
-  const title=cancel?'Annuler la séance':'Rétablir la séance';
-  schShowDialog(title,`<form class="form" data-school-form="session-cancellation"
-    data-id="${item.id}" data-revision="${item.revision}" data-cancel="${cancel}">
-    <div><h3>${schValue(item.title)}</h3>${schSessionMeta(item)}</div>
-    ${cancel?`<div><label for="schoolCancelReason">Motif de l’annulation</label>
-      <textarea id="schoolCancelReason" name="reason" maxlength="400" rows="3" dir="auto" required></textarea></div>`:''}
-    <p class="school-small school-muted">Le professeur, les élèves et leurs parents seront avertis dans leur espace.</p>
-    ${schError()}<div><button type="submit" class="btn ${cancel?'danger':'primary'}">${title}</button></div>
-    </form>`);
-}
-
-function schSessionValues(form) {
-  const payload=new FormData(form);
-  const [hour,minute]=String(payload.get('time')||'').split(':').map(Number);
-  const start=hour*60+minute;
-  payload.set('start',String(start));
-  const item=schoolUI.editor?.item;
-  if(item){payload.set('id',item.id);payload.set('revision',String(item.revision));}
-  return payload;
-}
-
-function schPreviewSession() {
-  const form=schNode('schoolSessionForm');
-  if(!form?.reportValidity())return;
-  const values=schSessionValues(form);
-  const old=schoolUI.editor?.item;
-  const teacher=values.get('teacher')||schoolUI.data.account.id;
-  const entry=schStaffClasses(teacher).find(c=>c.id===values.get('class'));
-  if(!entry)return schToast('Choisis une classe');
-  const duration=Number(values.get('duration'));
-  if(Number(values.get('start'))+duration>1440)return schToast('La séance doit finir le même jour.');
-  const file=form.elements.support.files[0];
-  const video=values.get('video');
-  const meeting=values.get('meeting');
-  if((video&&!schSafeLink(video))||(meeting&&!schSafeLink(meeting)))return schToast('Utilise un lien HTTPS valide.');
-  if(file&&file.size>12*1024*1024)return schToast('Le support doit faire au plus 12 Mo.');
+function schChapterPreview(button) {
+  const form=button.form;
+  if(!form.reportValidity())return;
+  const {title,description,exercise,due,video,removeFile}=Object.fromEntries(new FormData(form));
+  const level=schStaffClasses(schoolUI.data.account.id).find(row=>row.id===form.elements.namedItem('class').value);
+  if(!level)return;
+  const old=schoolUI.editor.item;
+  const file=form.elements.namedItem('support').files[0];
   schClearPreview();
   if(file)schoolUI.previewUrl=URL.createObjectURL(file);
-  const item={id:old?.id,title:values.get('title'),subject:entry.subject,class_name:entry.name,
-    date:values.get('date'),start_minute:Number(values.get('start')),duration,description:values.get('description'),
-    exercise:values.get('exercise'),short_exercise:values.get('shortExercise'),due_date:values.get('due'),video_url:video,meeting_url:meeting,
-    file:file?{name:file.name,type:file.type || (/\.mp4$/i.test(file.name)?'video/mp4':/\.webm$/i.test(file.name)?'video/webm':'application/pdf')}:
-      values.get('removeFile')==='1'?null:old?.file};
-  const preview=schNode('schoolSessionPreview');
-  preview.innerHTML=localizeHTML(`<h3>Vérifier la séance avant publication</h3><strong>${schValue(item.title)}</strong>
-    ${schSessionContent(item,schoolUI.previewUrl)}
-    ${item.short_exercise?`<section class="school-block"><h3>Exercice en version courte</h3><p data-no-i18n="true" dir="auto">${schEsc(item.short_exercise)}</p></section>`:''}`);
+  const chapter={id:old?.id,title,description,exercise,due_date:due,video_url:video,class_name:level.name,subject:level.subject,
+    file:file?{name:file.name,type:file.type}:removeFile?null:old?.file};
+  const preview=schNode('schoolChapterPreview');
+  preview.innerHTML=localizeHTML(`<h3>${schValue(title)}</h3>`+schSessionContent(chapter,schoolUI.previewUrl));
   preview.hidden=false;
   preview.focus();
-  preview.scrollIntoView({block:'nearest'});
-}
-
-async function schSlots(button) {
-  const form=schNode('schoolSessionForm');
-  const values=new FormData(form);
-  const id=schoolUI.editor?.item?.id;
-  const query=new URLSearchParams({teacher:values.get('teacher')||'',class:values.get('class')||'',
-    date:values.get('date')||'',duration:values.get('duration')||'',session:id||''});
-  const output=schNode('schoolSlots');
-  button.disabled=true;
-  try {
-    const {slots}=await schRequest('/slots?'+query);
-    if(!output.isConnected)return;
-    output.innerHTML=localizeHTML(slots.length?
-      `<p class="school-small school-muted">Créneaux proposés, du lundi au vendredi, entre 8 h et 18 h.</p><div class="school-actions">${slots.map(slot=>
-        `<button type="button" class="btn secondary small" data-school-action="pick-slot" data-date="${slot.date}" data-start="${slot.start_minute}">
-          ${schValue(schDate(slot.date)+' · '+schClock(slot.start_minute))}</button>`).join('')}</div>`:
-      schEmpty('Aucun créneau trouvé dans les deux prochaines semaines.'));
-  } catch(error){output.textContent=tr(error.message);}
-  finally{button.disabled=false;}
 }
 
 function schPeriodStatus(period) {
@@ -398,7 +318,7 @@ function schAdminNotes() {
             ${period.publish_at!==null?'<button type="button" class="btn secondary" data-school-action="cancel-publication">Annuler la programmation</button>':''}</div>
           </form>`}</section>
       <section class="card school-full"><h2>Avancement de la saisie</h2>
-        ${progress.length?`<div class="school-table-wrap"><table class="school-table"><thead><tr><th scope="col">Classe</th>
+        ${progress.length?`<div class="school-table-wrap"><table class="school-table"><thead><tr><th scope="col">Niveau</th>
           <th scope="col">Matière</th><th scope="col">Évaluation</th><th scope="col">Notes saisies</th></tr></thead>
           <tbody>${progress.map(row=>`<tr><td>${schValue(row.class_name)}</td><td>${schValue(row.subject)}</td><td>${schValue(row.title)}</td>
             <td><bdi dir="ltr">${row.marked} / ${row.total}</bdi></td></tr>`).join('')}</tbody></table></div>`:
@@ -445,46 +365,36 @@ function schNotesPage() {
 
 const SCHOOL_ASSESSMENT_NAMES={test:'Contrôle',exam:'Examen',oral:'Oral',other:'Autre évaluation'};
 
-function schAssessmentsPage() {
-  const data=schoolUI.data;
-  const teacher=data.account.role==='professeur';
-  const items=data.assessments||[];
-  return `<div class="school-title"><h1>Évaluations</h1>${teacher?
-    `<button class="btn primary" type="button" data-school-action="edit-assessment" ${data.directory.classes.length?'':'disabled'}>Ajouter une évaluation</button>`:''}</div>
-    <section class="card school-stack">${items.length?items.map(item=>`<article class="school-session school-stack">
-      <div class="school-session-top"><div><h2>${schValue(item.title)}</h2>
-      <div class="school-meta"><span>${SCHOOL_ASSESSMENT_NAMES[item.kind]}</span> ·
-        ${schValue(item.class_name+' · '+item.subject+' · '+schDate(item.date))}</div></div>
-      ${teacher&&!item.graded?`<div class="school-actions">
-        <button class="btn secondary small" type="button" data-school-action="edit-assessment" data-id="${item.id}">Modifier</button>
-        <button class="btn danger small" type="button" data-school-action="remove-assessment" data-id="${item.id}">Supprimer</button>
-        </div>`:teacher&&item.graded?'<span class="tag mint">Notes enregistrées</span>':''}</div>
-      ${item.instruction?`<p class="school-text" data-no-i18n="true" dir="auto">${schEsc(item.instruction)}</p>`:''}</article>`).join(''):
-    schEmpty('Aucune évaluation enregistrée.')}</section>`;
-}
-
 function schAssessmentEditor(item,draft=item) {
   const classes=schoolUI.data.directory.classes;
   if(!classes.length)return;
+  const now=schNow();
   schShowDialog(item?'Modifier l’évaluation':'Ajouter une évaluation',`<form class="form" data-school-form="assessment"
     data-id="${item?.id||''}" data-revision="${item?.revision||''}">
     <div class="school-fields">
       <div class="school-full"><label for="schoolAssessmentTitle">Titre de l’évaluation</label>
-        <input name="title" id="schoolAssessmentTitle" maxlength="120" value="${schEsc(item?.title)}" required></div>
-      <div><label for="schoolAssessmentClass">Classe</label><select name="classId" id="schoolAssessmentClass" required>
+        <input name="title" id="schoolAssessmentTitle" maxlength="120" value="${schEsc(draft?.title)}" required></div>
+      <div><label for="schoolAssessmentClass">Niveau</label><select name="classId" id="schoolAssessmentClass" required>
         ${classes.map(c=>schOpt(c.id,c.name+' · '+c.subject,draft?.class_id)).join('')}</select></div>
       <div><label for="schoolAssessmentType">Type d’évaluation</label><select name="kind" id="schoolAssessmentType">
         ${Object.entries(SCHOOL_ASSESSMENT_NAMES).map(([kind,name])=>schOpt(kind,name,draft?.kind)).join('')}</select></div>
-      <div><label for="schoolAssessmentDate">Date de l’évaluation</label><input type="date" name="date" id="schoolAssessmentDate"
-        value="${item?.date||schDay(schNow())}" required></div>
-      <div class="school-full"><label for="schoolAssessmentInstruction">Consigne</label>
-        <textarea name="instruction" id="schoolAssessmentInstruction" maxlength="12000">${schEsc(draft?.instruction)}</textarea></div>
+      <div><label for="schoolAssessmentOpen">Ouverture des remises</label><input type="datetime-local" name="opens" id="schoolAssessmentOpen"
+        value="${schMinute(item?.opens_at||now)}" required></div>
+      <div><label for="schoolAssessmentClose">Fin des remises</label><input type="datetime-local" name="closes" id="schoolAssessmentClose"
+        value="${schMinute(item?.closes_at||now+7*86400000)}" required></div>
+      <div><label for="schoolAssessmentDuration">Durée en minutes (facultatif)</label>
+        <input type="number" id="schoolAssessmentDuration" name="duration" min="5" max="480" value="${item?.duration_minutes??''}">
+        <p class="school-small school-muted">Le minuteur démarre quand l’élève clique sur Commencer.</p></div>
+      <div class="school-full"><label for="schoolAssessmentInstruction">Sujet et consignes</label>
+        <textarea name="instruction" id="schoolAssessmentInstruction" maxlength="12000" required>${schEsc(draft?.instruction)}</textarea></div>
+      <div class="school-full"><label for="schoolAssessmentRubric">Barème sur 20</label>
+        <textarea name="rubric" id="schoolAssessmentRubric" maxlength="4000" required>${schEsc(item?.rubric)}</textarea></div>
     </div>${schError()}<div><button type="submit" class="btn primary">${item?'Enregistrer':'Publier l’évaluation'}</button></div></form>`);
 }
 
 function schGradeRows(classId,scores={}) {
   const students=schoolUI.data.directory.students.filter(s=>s.class_id===classId);
-  if(!students.length)return schEmpty('Aucun élève inscrit dans cette classe.');
+  if(!students.length)return schEmpty('Aucun élève inscrit dans ce niveau.');
   return `<div class="school-table-wrap"><table class="school-table"><thead><tr><th scope="col">Élève</th>
     <th scope="col" id="schoolScoreHeading">Note / 20</th></tr></thead><tbody>
     ${students.map((student,i)=>`<tr><th scope="row" id="schoolScoreStudent${i}">${schValue(student.name)}</th>
@@ -610,18 +520,11 @@ function schStaffChange(target) {
     const subject=target.form?.elements.namedItem('subject');
     if(subject)subject.required=!!target.form.querySelector('[name="teacherClass"]:checked');
   }
-  if(target.id==='schoolSessionTeacher'){
-    const field=schNode('schoolSessionClass');
-    const current=field.value;
-    field.innerHTML=localizeHTML(schOpt('','Choisis une classe')+
-      schStaffClasses(target.value).map(c=>schOpt(c.id,c.name+' · '+c.subject,current)).join(''));
-  }
-  if(target.closest('#schoolSessionForm')){
-    schSeriesChange(target.form);
-    schNode('schoolSessionPreview').hidden=true;
-    schNode('schoolSlots').innerHTML='';
+  if(target.closest('[data-school-form="chapter"]')) {
+    schNode('schoolChapterPreview').hidden=true;
     schClearPreview();
   }
+
 }
 
 const schPeriodPayload=form=>({id:Number(form.dataset.id)||null,revision:Number(form.dataset.revision)||null,timeZone:SCHOOL_TIME_ZONE});
@@ -631,7 +534,7 @@ function schStaffSubmit(form,button) {
   const data=Object.fromEntries(values);
   switch(form.dataset.schoolForm){
     case 'class':
-      return schMutation(button,'/classes',data,'La classe a été créée.');
+      return schMutation(button,'/classes',data,'Le niveau a été créé.');
     case 'account':
       data.classIds=data.role==='eleve'?[data.studentClass]:values.getAll('teacherClass');
       data.childIds=values.getAll('child');
@@ -650,13 +553,11 @@ function schStaffSubmit(form,button) {
       return schMutation(button,'/accounts/archive',{id:form.dataset.id,revision:Number(form.dataset.revision),archived},
         archived?'Le compte a été archivé.':'Le compte a été restauré.',{close:true});
     }
-    case 'session':
-      return schSaveSession(form,button);
-    case 'session-cancellation': {
-      const cancel=form.dataset.cancel==='true';
-      return schMutation(button,'/session/cancellation',{id:form.dataset.id,revision:Number(form.dataset.revision),cancel,reason:data.reason},
-        cancel?'La séance a été annulée.':'La séance a été rétablie.',{close:true});
-    }
+    case 'chapter':
+      if(form.dataset.id){values.set('id',form.dataset.id);values.set('revision',form.dataset.revision);}
+      return schMutation(button,'/chapter',values,'Le chapitre a été enregistré.',{close:true,onSaved(){
+        if(schPage()!=='cours')location.hash='cours';
+      }});
     case 'period':
       return schMutation(button,'/period',{...schPeriodPayload(form),...data},'La période a été enregistrée.');
     case 'open-grades':
@@ -683,7 +584,7 @@ function schStaffAction(button) {
     if(member)return action==='account-edit'?schEditAccount(member):schArchiveAccount(member);
   }
   if(action==='open-grades')return schOpenGrades();
-  if(action==='session-cancellation')return schSessionCancellationDialog(schFindSession(id));
+  if(action==='preview-chapter')return schChapterPreview(button);
   if(action==='account-access'){
     const account=schoolUI.data.directory.accounts.find(a=>a.id===id);
     if(account)return schMutation(button,'/accounts/access',{id,revision:account.revision,active:!account.active},'Le statut du compte a été modifié.');
@@ -691,17 +592,6 @@ function schStaffAction(button) {
   if(action==='edit-session') {
     const item=id?schFindSession(id):null;
     return schSessionEditor(item,item||(button.dataset.kind==='course'?{kind:'course'}:null));
-  }
-  if(action==='preview-session')return schPreviewSession();
-  if(action==='preview-series')return schPreviewSeries(button.form,button);
-  if(action==='slots')return schSlots(button);
-  if(action==='pick-slot'){
-    schNode('schoolSessionDate').value=button.dataset.date;
-    schNode('schoolSessionTime').value=schClock(Number(button.dataset.start));
-    schNode('schoolSlots').innerHTML='';
-    schNode('schoolSessionPreview').hidden=true;
-    schClearPreview();
-    return;
   }
   if(action==='close-period')return schMutation(button,'/period/close',schPeriodPayload(button.closest('form')),'La saisie a été fermée.');
   if(action==='publish-now'||action==='cancel-publication'){

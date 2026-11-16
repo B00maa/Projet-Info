@@ -9,19 +9,19 @@ const SCHOOL_API='/api/school';
 const schShowSetup = () => ['ready','missing-code','invalid-code'].includes(schoolUI.setupState);
 const SCHOOL_ROLE_NAMES={administration:'Administration',professeur:'Professeur',eleve:'Élève',parent:'Parent'};
 const SCHOOL_NAV={
-  administration:[['dashboard','Vue d’ensemble'],['planning','Planning des séances'],['absences','Absences et justificatifs'],
-    ['classes','Classes'],['eleves','Élèves inscrits'],['professeurs','Professeurs'],['parents','Parents'],['notes','Périodes et résultats'],
-    ['evaluations','Évaluations'],['comptes','Gestion des comptes'],['historique','Historique des comptes'],['bibliotheque','Bibliothèque'],
+  administration:[['dashboard','Vue d’ensemble'],['classes','Niveaux scolaires'],['eleves','Élèves inscrits'],
+    ['professeurs','Professeurs'],['parents','Parents'],['notes','Périodes et résultats'],['evaluations','Évaluations'],
+    ['comptes','Gestion des comptes'],['historique','Historique des comptes'],['bibliotheque','Bibliothèque'],
     ['statistiques','Statistiques'],['messages','Messagerie'],['annonces','Annonces'],['parametres','Paramètres'],['notifications','Notifications']],
-  professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes classes'],['eleves','Mes élèves'],
-    ['notes','Saisie des notes'],['evaluations','Évaluations'],['planning','Mes séances'],['presences','Suivi des présences'],
-    ['cours','Mes cours'],['coach','Coach pédagogique'],['devoirs','Devoirs de mes classes'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']],
-  eleve:[['aujourdhui','Mon tableau de bord'],['planning','Mon calendrier'],['absences','Mes absences'],['fatigue','Mode fatigue'],['cours','Mes matières'],['bibliotheque','Bibliothèque'],
-    ['devoirs','Mes devoirs'],['evaluations','Évaluations'],['rattrapage','À rattraper'],['notes','Mes notes et progrès'],
-    ['coach','Coach d’études'],['messages','Mes messages'],['annonces','Annonces'],['notifications','Notifications']],
-  parent:[['famille','Suivi de mon enfant'],['semaine','Résumé de la semaine'],['planning','Son planning'],['rattrapage','Séances passées'],
-    ['absences','Son assiduité'],['fatigue','Mode fatigue'],['devoirs','Ses devoirs'],['evaluations','Évaluations'],
-    ['notes','Ses résultats'],['messages','Contacter les enseignants'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']]
+  professeur:[['dashboard','Mon tableau de bord'],['messages','Messagerie'],['classes','Mes niveaux'],['eleves','Mes élèves'],
+    ['notes','Saisie des notes'],['evaluations','Évaluations'],['cours','Mes cours'],['progression','Progression des élèves'],
+    ['coach','Coach pédagogique'],['devoirs','Devoirs à corriger'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']],
+  eleve:[['aujourdhui','Mon tableau de bord'],['cours','Mes parcours'],['revoir','Revoir une notion'],
+    ['devoirs','Mes devoirs'],['evaluations','Évaluations'],['notes','Mes notes et progrès'],['coach','Coach d’études'],
+    ['messages','Mes messages'],['fatigue','Mode fatigue'],['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']],
+  parent:[['famille','Suivi de mon enfant'],['progression','Progression'],['devoirs','Ses devoirs'],['evaluations','Évaluations'],
+    ['notes','Ses résultats'],['messages','Contacter les enseignants'],['fatigue','Mode fatigue'],
+    ['bibliotheque','Bibliothèque'],['annonces','Annonces'],['notifications','Notifications']]
 };
 const SCHOOL_PERIOD_LABELS={scheduled:'Ouverture programmée',open:'Saisie ouverte',closed:'Saisie fermée',
   'publication-planned':'Publication programmée',published:'Notes publiées'};
@@ -69,7 +69,7 @@ const SCHOOL_AR={
   'La publication a été programmée.':'تمت برمجة النشر.','Les notes ont été publiées.':'تم نشر النقط.',
   'La programmation a été annulée.':'أُلغيت برمجة النشر.','Les notes ont été enregistrées.':'تم حفظ النقط.',
   'Se déconnecter':'تسجيل الخروج','Connexion scolaire':'تسجيل الدخول المدرسي',
-  'Explorer la maquette':'استكشاف النموذج','Actualiser':'تحديث','Choisis une classe':'اختر قسماً',
+  'Actualiser':'تحديث','Choisis une classe':'اختر قسماً',
   'Ouvre le fichier joint':'افتح الملف المرفق','Aucun support joint':'لا يوجد مورد مرفق',
   'Rôle':'الدور','Compte scolaire':'حساب مدرسي','Élève suivi':'التلميذ المتابَع',
   'Les horaires du planning utilisent l’heure du Maroc.':'تستخدم مواعيد الجدول توقيت المغرب.',
@@ -94,8 +94,10 @@ const schMinute=timestamp=>new Intl.DateTimeFormat('sv-SE',{timeZone:SCHOOL_TIME
 const schNow=()=>schoolUI.clock ? schoolUI.clock.now+(performance.now()-schoolUI.clock.at) : Date.now();
 const schClock=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
 const schLocale=()=>state.lang==='ar' ? 'ar-MA-u-ca-gregory-nu-latn' : 'fr-MA';
-const schDate=(date,opts={day:'numeric',month:'short'})=>new Intl.DateTimeFormat(schLocale(),{timeZone:'UTC',...opts})
-  .format(new Date(date+'T12:00:00Z'));
+function schDate(date,opts={day:'numeric',month:'short'}) {
+  const day=new Date(date+'T12:00:00Z');
+  return Number.isFinite(day.getTime())?new Intl.DateTimeFormat(schLocale(),{timeZone:'UTC',...opts}).format(day):'';
+}
 const schTimestamp=ms=>new Intl.DateTimeFormat(schLocale(),{timeZone:SCHOOL_TIME_ZONE,dateStyle:'medium',timeStyle:'short'}).format(ms);
 const schOpt=(value,label,selected)=>`<option value="${schEsc(value)}" ${value===selected?'selected':''}>${schEsc(label)}</option>`;
 const schEmpty=label=>`<p class="school-empty">${label}</p>`;
@@ -322,7 +324,6 @@ function schAuth() {
       <div class="school-auth-footer">
         <div id="schoolSetupAction" ${ready&&schShowSetup()?'':'hidden'}><button type="button" class="btn secondary small"
           data-school-action="activate-administration">${siteIcon('settings','sm')}<span>Activer l’administration</span></button></div>
-        <a class="text-link" href="/">Explorer la maquette</a>
       </div>
     </div>
   </section>`;
@@ -399,14 +400,20 @@ function schRender() {
   }
   const chooser=['famille','messages','annonces','notifications'].includes(page)?'':schChildPicker(data);
   const content={dashboard:admin?schAdminDashboard:schTeacherDashboard,classes:admin?schAdminClasses:schTeacherClasses,
-    eleves:admin?schAccountsPage:schTeacherStudents,professeurs:schAccountsPage,presences:schTeacherAttendance,
+    eleves:admin?schAccountsPage:schTeacherStudents,professeurs:schAccountsPage,
     comptes:schAccountsPage,parents:schAccountsPage,historique:schAdminHistory,statistiques:schAdminStatistics,parametres:schAdminSettings,
-    aujourdhui:schTodayPage,famille:schFamilyPage,planning:schPlanningPage,notes:schNotesPage,rattrapage:schCatchupPage,semaine:schParentPage,
-    absences:schAbsencesPage,fatigue:schFatiguePage,cours:schCoursesPage,bibliotheque:schLibraryPage,devoirs:schHomeworkPage,
+    aujourdhui:schStudentPathHome,famille:schParentPathHome,notes:schNotesPage,revoir:schReviewPage,
+    progression:schProgressPage,fatigue:schFatiguePage,cours:schCoursesPage,bibliotheque:schLibraryPage,devoirs:schHomeworkPage,
     evaluations:schAssessmentsPage,messages:schMessagesPage,annonces:schAnnouncementsPage,notifications:schNotificationsPage,
     coach:data.account.role==='eleve'?studentCoachPage:teacherCoachPage};
-  const view=data.view===page?content[page]():'<p role="status" class="school-empty">Chargement de l’espace scolaire…</p>';
-  schNode('schoolApp').innerHTML=localizeHTML(chooser+view);
+  try {
+    const view=data.view===page?content[page]():'<p role="status" class="school-empty">Chargement de l’espace scolaire…</p>';
+    schNode('schoolApp').innerHTML=localizeHTML(chooser+view);
+  } catch(error) {
+    console.error('School page failed',page,error);
+    schNode('schoolApp').innerHTML=localizeHTML('<section class="card school-stack"><p role="alert">Cette page n’a pas pu s’afficher.</p>'+
+      '<div><button type="button" class="btn secondary" data-school-action="refresh">Réessayer</button></div></section>');
+  }
   restoreSchoolScroll(scroll);
   schoolUI.dirty=false;
   schScheduleBoundary();
@@ -421,45 +428,8 @@ function schRender() {
   }
 }
 
-function schWeekBar(showPack=false) {
-  const week=schoolUI.data.week;
-  const [start,end]=[schDate(week.start),schDate(week.end,{day:'numeric',month:'short',year:'numeric'})];
-  return `<div class="school-week">
-    <div class="school-actions">
-      <button type="button" class="btn secondary small" data-school-action="week" data-value="-1">Semaine précédente</button>
-      <time data-no-i18n="true" datetime="${week.start}">${schEsc(start+' – '+end)}</time>
-      <button type="button" class="btn secondary small" data-school-action="week" data-value="1">Semaine suivante</button>
-    </div>
-    <div class="school-actions"><button type="button" class="btn secondary small" data-school-action="week" data-value="0">Cette semaine</button>
-      ${showPack?`<button type="button" class="btn primary" data-school-action="download-pack" ${schoolUI.data.sessions.length||schoolUI.data.assignments?.length?'':'disabled'}>Télécharger le dossier de la semaine</button>
-        <button type="button" class="btn secondary" data-school-action="weekly-pdf" ${schoolUI.data.sessions.length||schoolUI.data.assignments?.length?'':'disabled'}>Fiche de la semaine PDF</button>`:''}</div>
-  </div>`;
-}
-
 function schSessionMeta(item) {
-  return `<div class="school-meta"><span>${schValue(item.class_name)}</span><span>·</span><span>${schValue(item.subject)}</span>
-    <span>·</span><time data-no-i18n="true" datetime="${item.date}">${schEsc(schDate(item.date))} · <bdi dir="ltr">${schClock(item.start_minute)}–${schClock(item.start_minute+item.duration)}</bdi></time></div>`;
-}
-
-function schSessionRow(item,edit=false,showTeacher=true,showQuiz=false) {
-  const now=schMinute(schNow());
-  const future=item.date+'T'+schClock(item.start_minute)>now;
-  const cancelled=item.cancelled_at!=null;
-  const {account,directory}=schoolUI.data;
-  const admin=account.role==='administration';
-  const canEdit=edit&&!cancelled&&['administration','professeur'].includes(account.role);
-  const needsTeacher=admin&&schAdminSessionNeedsTeacher(item,directory,now);
-  return `<article class="school-session"><div class="school-session-top"><div><h3>${schValue(item.title)}</h3>
-    ${schSessionMeta(item)}${showTeacher?`<p class="school-muted school-small">${schValue(item.teacher_name)}</p>`:''}
-    ${needsTeacher?'<span class="tag orange">Professeur à réattribuer</span>':''}
-    ${item.series_id?'<span class="tag soft">Série hebdomadaire</span>':''}
-    ${cancelled?'<span class="tag orange">Séance annulée</span>':''}</div>
-    <div class="school-actions"><button type="button" class="btn secondary small" data-school-action="view-session" data-id="${item.id}">Voir la séance</button>
-    ${showQuiz?schQuizActions(item):''}
-    ${canEdit&&!future?`<button type="button" class="btn secondary small" data-school-action="attendance" data-id="${item.id}">Faire l’appel</button>`:''}
-    ${canEdit?`<button type="button" class="btn secondary small" data-school-action="edit-session" data-id="${item.id}">Modifier la séance</button>`:''}
-    ${edit&&admin&&future?`<button type="button" class="btn secondary small" data-school-action="session-cancellation" data-id="${item.id}">
-      ${cancelled?'Rétablir la séance':'Annuler la séance'}</button>`:''}</div></div></article>`;
+  return `<div class="school-meta">${schValue([item.class_name,item.subject].filter(Boolean).join(' · '))}</div>`;
 }
 
 function schLessonReading(description) {
@@ -483,123 +453,27 @@ function schSessionContent(item,previewUrl='',childId=schoolUI.data?.child?.id) 
   const file=item.file;
   const support=previewUrl || (file && item.id ? schFileLink(item.id,true,childId) : '');
   const video=schSafeLink(item.video_url);
-  const cancelled=item.cancelled_at!=null;
-  const meeting=cancelled?'':schSafeLink(item.meeting_url);
   const calm=schoolUI.data?.account.role==='eleve'&&schFatigueCurrent()?.status==='approved';
   const work=calm&&item.short_exercise?item.short_exercise:item.exercise;
   const quiz=schQuizActions(item);
   return `<div class="school-stack">
     ${schSessionMeta(item)}
-    ${cancelled?`<section class="school-callout school-cancelled-note"><h3>Séance annulée</h3>
-      <p data-no-i18n="true" dir="auto">${schEsc(item.cancel_reason)}</p></section>`:''}
     ${item.description?`<section class="school-block"><h3>Consigne</h3>${schLessonReading(item.description)}</section>`:''}
-    ${file&&support?`<section class="school-block"><h3>Support de la séance</h3>
+    ${file&&support?`<section class="school-block"><h3>Support du chapitre</h3>
       ${file.type?.startsWith('video/')?`<video controls preload="metadata" src="${schEsc(support)}"></video>`:''}
       <a class="btn secondary" href="${schEsc(support)}" target="_blank" rel="noopener noreferrer">${schValue(file.name)}</a>
       ${previewUrl?'':`<a class="btn secondary" href="${schEsc(schFileLink(item.id,false,childId))}">Télécharger le support</a>`}</section>`:''}
     ${video?`<section class="school-block"><a href="${schEsc(video)}" target="_blank" rel="noopener noreferrer" class="btn secondary">Vidéo en ligne</a></section>`:''}
     ${work?`<section class="school-block"><h3>${work===item.short_exercise&&calm?'Exercice en version courte':'Exercice associé'}</h3>
       <p data-no-i18n="true" dir="auto">${schEsc(work)}</p>
-      <p class="school-small school-muted"><span>Date de remise</span> · ${schValue(schDate(item.due_date||item.date))}</p></section>`:''}
-    ${meeting?`<div><a class="btn primary" href="${schEsc(meeting)}" target="_blank" rel="noopener noreferrer">Rejoindre la séance</a></div>`:''}
+       ${item.due_date?`<p class="school-small school-muted"><span>Date de remise</span> · ${schValue(schDate(item.due_date))}</p>`:''}</section>`:''}
     ${quiz?`<div class="school-actions">${quiz}</div>`:''}</div>`;
-}
-
-function schPlanningPage() {
-  const data=schoolUI.data;
-  const admin=data.account.role==='administration';
-  const edit=admin||data.account.role==='professeur';
-  const ready=admin?schAdminCanSchedule(data.directory):!!data.directory.classes?.length;
-  const review=admin&&schViewParams().get('etat')==='reaffecter';
-  const now=schMinute(schNow());
-  const sessions=review?data.sessions.filter(item=>schAdminSessionNeedsTeacher(item,data.directory,now)):data.sessions;
-  return `<div class="school-title"><h1>${SCHOOL_NAV[data.account.role].find(([key])=>key==='planning')[1]}</h1>
-    ${edit?`<button type="button" class="btn primary" data-school-action="edit-session" ${ready?'':'disabled'}>Nouvelle séance</button>`:''}</div>
-    ${schFatigueBanner()}
-    ${schWeekBar(data.account.role==='eleve')}
-    ${admin?`<nav class="school-actions school-directory-tabs" aria-label="État des séances">
-      <a class="btn ${review?'secondary':'primary'} small" href="#planning" ${review?'':'aria-current="page"'}>Toutes les séances</a>
-      <a class="btn ${review?'primary':'secondary'} small" href="#planning?etat=reaffecter" ${review?'aria-current="page"':''}>À réattribuer</a></nav>`:''}
-    ${data.account.role==='eleve'?'<p class="school-small school-muted school-note">Ouvre index.html après avoir décompressé le dossier. Le lien vidéo nécessite une connexion.</p>':''}
-    <section class="card">${sessions.length?sessions.map(item=>schSessionRow(item,edit)).join(''):
-      schEmpty(review?'Aucune séance à réattribuer cette semaine.':'Aucune séance cette semaine.')}</section>`;
 }
 
 function schFindSession(id) {
   const data=schoolUI.data;
   return [...data.sessions,...(data.upcoming||[]),...(data.catchup||[]),...(data.changes||[]),...(data.assignments||[]),
     ...(data.courses||[]),...(data.supports||[])].find(item=>item.id===id);
-}
-
-function schCatchupPage() {
-  const focus=schViewParams().get('seance');
-  const previous=[...(schoolUI.data.catchup||[])].sort((a,b)=>Number(b.id===focus)-Number(a.id===focus));
-  if(schoolUI.data.account.role==='parent')return `<div class="school-title"><h1>Séances passées</h1></div>
-    <section class="card">${previous.length?previous.map(item=>schSessionRow(item)).join(''):schEmpty('Aucune séance passée.')}</section>`;
-  const labels=['Consulter le support','Faire l’exercice','Marquer la séance comme rattrapée'];
-  const render=item=>`<section class="card school-stack">
-      <div class="school-session-top"><div><h2>${schValue(item.title)}</h2>${schSessionMeta(item)}</div>
-        ${item.step===3?'<span class="tag mint">Rattrapage terminé</span>':item.missed?'<span class="tag orange">Séance manquée</span>':''}
-      </div><ol class="school-checks">${labels.map((label,i)=>`<li class="${item.step>i?'done':''}">
-        <span class="school-step-number" aria-hidden="true">${item.step>i?'✓':i+1}</span>
-        <span>${label}</span>${item.step>i?'<span class="sr-only">Étape terminée</span>':''}</li>`).join('')}</ol>
-      <div class="school-actions"><button type="button" class="btn secondary" data-school-action="view-session" data-id="${item.id}">Voir la séance</button>
-        ${item.step<3?`<button type="button" class="btn primary" data-school-action="catchup" data-id="${item.id}" data-value="${item.step+1}">${['Support consulté','Exercice fait','Marquer la séance comme rattrapée'][item.step]}</button>`:''}</div>
-      </section>`;
-  const missed=previous.filter(item=>item.missed);
-  const other=previous.filter(item=>!item.missed);
-  return `<div class="school-title"><h1>À rattraper</h1></div>
-    <div class="school-stack">${missed.length?missed.map(render).join(''):
-      `<section class="card">${schEmpty('Aucune séance manquée signalée.')}</section>`}
-    ${other.length?`<details class="card school-details"><summary>Autres séances passées</summary>
-      <div class="school-stack school-note">${other.map(render).join('')}</div></details>`:''}</div>`;
-}
-
-function schGradesTable(grades) {
-  if(!grades.length)return schEmpty('Aucune note publiée.');
-  const number=new Intl.NumberFormat(schLocale(),{maximumFractionDigits:2});
-  return `<div class="school-table-wrap"><table class="school-table"><thead><tr><th scope="col">Matière</th><th scope="col">Évaluation</th>
-    <th scope="col">Date</th><th scope="col">Note / 20</th></tr></thead><tbody>
-    ${grades.map(item=>`<tr><td>${schValue(item.subject)}</td><td>${schValue(item.title)}</td>
-      <td>${schValue(schDate(item.date))}</td><td><span class="tag mint">${schValue(number.format(item.score))}</span></td></tr>`).join('')}
-    </tbody></table></div>`;
-}
-
-function schParentPage() {
-  const data=schoolUI.data;
-  const childSelect=data.children.length===1?`<span class="tag mint">${schValue(data.child.name)}</span>`:'';
-  if(!data.child)return `<div class="school-title"><h1>Résumé de la semaine</h1></div>${schParentLifeSummary()}<section class="card">${schEmpty('Aucun élève associé à ce compte.')}</section>`;
-  const assignments=data.assignments||[];
-  const changes=data.changes||[];
-  return `<div class="school-title"><h1>Résumé de la semaine</h1>${childSelect}</div>
-    ${schParentLifeSummary()}
-    ${schWeekBar()}<div class="school-grid">
-    <section class="card"><h2>Devoirs de la semaine</h2>${assignments.length?assignments.map(item=>
-      `<article class="school-session"><h3>${schValue(item.title)}</h3><div class="school-meta">${schValue(item.subject)} · ${schValue(schDate(item.due_date))}</div>
-      <button class="btn secondary small" type="button" data-school-action="view-session" data-id="${item.id}">Voir la séance</button></article>`
-    ).join(''):schEmpty('Aucun devoir cette semaine.')}</section>
-    <section class="card"><h2>Changements de planning</h2>${changes.length?changes.map(item=>schSessionRow(item)).join(''):schEmpty('Aucun changement cette semaine.')}</section>
-    <section class="card school-full"><div class="school-session-top"><h2>Nouvelles notes</h2>${schGradeReportButton()}</div>
-      ${schGradesTable(data.grades||[])}</section>
-    <section class="card school-full"><h2>Séances de la semaine</h2>${data.sessions.length?data.sessions.map(item=>schSessionRow(item)).join(''):schEmpty('Aucune séance cette semaine.')}</section>
-    </div>`;
-}
-
-async function schDownloadPack(button) {
-  button.disabled=true;
-  try {
-    const response=await fetch(SCHOOL_API+'/pack?week='+encodeURIComponent(schoolUI.data.week.start),{cache:'no-store'});
-    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Le téléchargement a échoué.');
-    const url=URL.createObjectURL(await response.blob());
-    const link=document.createElement('a');
-    link.href=url;
-    link.download='Madrassati-Maak-'+schoolUI.data.week.start+'.zip';
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
-  } catch(error) { schToast(error.message); }
-  finally { button.disabled=false; }
 }
 
 function schScheduleBoundary() {
@@ -645,11 +519,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   schDialog().addEventListener('close',()=>{
     if(schDialog().open)return;
     schCloseGradeEditor(schoolUI.editor);
+    schCloseCopy(schoolUI.editor);
     schoolUI.editor=null;schoolUI.credentials=null;schClearPreview();
     if(!schoolUI.dirty&&schoolUI.data)schRender();
   });
   document.addEventListener('input',event=>{
-    if(schGradeInput(event.target))return;
+    if(schCopyInput(event.target)||schGradeInput(event.target))return;
     if(event.target.matches('input[data-school-directory]')&&schDirectoryInput(event.target))return;
     if(event.target.id==='schoolRosterSearch'&&schTeacherSearch(event.target))return;
     if(event.target.id==='coachAIInput'){aiCoach.draft=event.target.value;schoolUI.dirty=!!aiCoach.draft;return;}
@@ -691,6 +566,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(event.target.dataset.schoolForm==='change-password')return schPasswordSubmit(event.target,event.submitter);
     if(event.target.dataset.schoolForm==='teacher-course')return submitTeacherCourseForm(event.target,event.submitter);
     if(['quiz-save','quiz-submit'].includes(event.target.dataset.schoolForm))return schQuizSubmit(event.target,event.submitter);
+    if(schPathSubmit(event.target,event.submitter))return;
     if(!schLifeSubmit(event.target,event.submitter))schStaffSubmit(event.target,event.submitter);
   });
   document.addEventListener('click',event=>{
@@ -736,17 +612,10 @@ window.addEventListener('DOMContentLoaded',()=>{
     else if(action==='change-password'&&schCanChangePassword(schoolUI.data.account))schPasswordDialog();
     else if(action==='workspace-menu')schWorkspaceMenu(true);
     else if(action==='workspace-menu-close')schWorkspaceMenu(false);
-    else if(action==='week'){
-      schoolUI.week=Number(value)===0?'':schDay(schoolUI.data.week.from+Number(value)*7*86400000);
-      schLoad();
-    } else if(action==='view-session'){
-      const session=schFindSession(id);
-      if(session)schShowDialog(session.title,schSessionContent(session));
-    } else if(action==='catchup')schMutation(button,'/catchup',{id,step:Number(value)},'Étape terminée');
+    else if(schPathAction(button))return;
     else if(action==='open-notification')schOpenNotification(button);
     else if(action==='grade-detail')schOpenGrade(button);
     else if(action==='quiz'||action.startsWith('quiz-'))schQuizAction(button);
-    else if(action==='download-pack')schDownloadPack(button);
     else if(!schLifeAction(button))schStaffAction(button);
   });
   document.addEventListener('keydown',event=>{

@@ -139,6 +139,8 @@
 .school-quiz-roster { font-size: .9rem; }
 .school-quiz-roster th, .school-quiz-roster td { padding: .55rem clamp(.25rem,2vw,.65rem); }
 .school-quiz-roster td strong { white-space: nowrap; }
+.school-path-questions { display: grid; gap: .35rem; padding-inline-start: 1.35rem; overflow-wrap: anywhere; }
+#schoolCopyTime { min-inline-size: 3rem; font-variant-numeric: tabular-nums; }
 .school-result-score { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
 .school-result-score meter { inline-size: 4.5rem; }
 .school-result-score meter::-webkit-meter-optimum-value { background: #347b55; }
