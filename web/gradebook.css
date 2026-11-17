@@ -1,0 +1,168 @@
+.gradebook-filters {
+  align-items: end;
+}
+
+.gradebook-filters .filter-field {
+  flex: 0 1 17rem;
+}
+
+.gradebook-subject {
+  display: grid;
+  gap: .35rem;
+  padding-block-end: .25rem;
+}
+
+.gradebook-subject span {
+  font-size: .8rem;
+  color: var(--muted);
+}
+
+.gradebook-evaluations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gradebook-evaluation,
+.gradebook-evaluation-actions,
+.gradebook-meta {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  flex-wrap: wrap;
+}
+
+.gradebook-evaluation {
+  justify-content: space-between;
+  padding-block: .85rem;
+  border-block-start: 1px solid var(--line);
+}
+
+.gradebook-evaluation-name {
+  display: grid;
+  gap: .25rem;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.gradebook-meta {
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.gradebook-empty,
+.gradebook-storage {
+  margin-block: .65rem 0;
+}
+
+.gradebook-recorded {
+  margin-block-end: 1rem;
+}
+
+.gradebook-details {
+  display: grid;
+  grid-template-columns: minmax(0,2fr) minmax(0,1fr);
+  gap: .85rem;
+}
+
+.gradebook-score-list {
+  max-block-size: min(45vh,22rem);
+  overflow: auto;
+}
+
+.gradebook-score-list th[scope="row"] {
+  white-space: normal;
+  font-weight: 600;
+}
+
+.gradebook-score-list .gradebook-score {
+  inline-size: 5.5rem;
+  text-align: center;
+}
+
+.gradebook-modal .modal-actions {
+  margin-block-start: 0;
+}
+
+@media (max-width: 540px) {
+  .gradebook-details {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+
+.grade-period-panel {
+  max-inline-size: 48rem;
+}
+
+.grade-period-notice {
+  margin-block-end: 1rem;
+}
+
+.grade-period-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.grade-period-times,
+.grade-period-dates {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .8rem;
+}
+
+.grade-period-times {
+  margin-block: .75rem 0;
+}
+
+.grade-period-times dt {
+  font-size: .8rem;
+  color: var(--muted);
+}
+
+.grade-period-times dd {
+  margin: .2rem 0 0;
+  font-weight: 600;
+}
+
+.grade-period-panel [role="status"] > p {
+  margin-block-start: .55rem;
+}
+
+.grade-period-form {
+  border-block-start: 1px solid var(--line);
+  padding-block-start: 1rem;
+  margin-block-start: 1rem;
+}
+
+.grade-period-dates input {
+  min-inline-size: 0;
+}
+
+.gradebook-fields {
+  display: grid;
+  gap: .8rem;
+  min-inline-size: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.gradebook-fields:disabled input {
+  background: var(--bg);
+  color: var(--navy);
+}
+
+#gradebookCreate:disabled,
+#gradebookForm button:disabled,
+#gradePeriodForm button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+@media (max-width: 540px) {
+  .grade-period-dates {
+    grid-template-columns: minmax(0,1fr);
+  }
+}

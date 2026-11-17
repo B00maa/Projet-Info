@@ -1,0 +1,61 @@
+'use strict';
+
+// Restrictions d'interface pour cette maquette ; une authentification réelle
+// et des permissions vérifiées côté serveur restent à ajouter en production.
+function allowedPages(role=state.role){return new Set([...menu[role].map(item=>item[0]).filter(page=>page!=='jeux'||state.examples),'accueil','connexion','assistance','parametres',...(role==='administration'?['eleves']:[])])}
+const ROLE_ACTION_RULES={
+ 'library-new':['professeur','administration'],'course-new':['professeur'],
+ 'homework-example':['professeur'],'homework-duplicate':['professeur'],'homework-queue':['professeur'],'homework-decline':['professeur'],
+ 'homework-confirm-delete':['professeur'],'homework-delete':['professeur'],
+ 'homework-save-draft':['eleve'],'homework-request':['eleve'],'homework-remove-file':['eleve'],
+ 'homework-download-file':['eleve','professeur'],'homework-calendar':['eleve','parent','professeur'],'homework-message':['parent'],
+ 'admin-queue':['administration'],'clear-account-filters':['administration'],'admin-planning-state':['administration'],
+ 'new-account':['administration'],'student-reassign':['administration'],'account-toggle':['administration'],'export-stats':['administration'],
+ 'new-session':['professeur','administration'],'edit-session':['professeur','administration'],'duplicate-session':['professeur','administration'],'preview-session':['professeur','administration'],'complete-session':['eleve'],'delete-session':['professeur','administration'],'confirm-session-delete':['professeur','administration'],'student-detail':['professeur','administration'],'open-class':['professeur','administration'],
+ 'gradebook-open':['professeur'],'grade-period-close':['administration'],'teacher-assignment':['professeur'],'generate':['professeur'],'edit-questions':['professeur'],'export-questions':['professeur'],'save-questions':['professeur'],
+ 'subject':['eleve'],'coach-mode':['eleve'],'coach-prompt':['eleve'],'coach-retry-answer':['eleve'],'coach-retry':['eleve','professeur'],'parent-assignment-filter':['parent'],
+ 'teacher-coach-view':['professeur'],'teacher-coach-section':['professeur'],'teacher-coach-plan':['professeur'],'teacher-coach-expand':['professeur'],'teacher-coach-checks':['professeur'],'teacher-coach-topic':['professeur'],'teacher-coach-task':['professeur'],'teacher-coach-template':['professeur'],'teacher-coach-open':['professeur'],'teacher-coach-download':['professeur'],'teacher-coach-cancel':['professeur'],'badges':['eleve'],'mood':['eleve'],'breathe':['eleve'],
+ 'export-grades':['eleve','parent'],'assignment-open':['eleve','parent','professeur'],'assignment-filter':['eleve','parent','professeur'],'export-attendance':['professeur','administration']
+};
+function isRoleActionAllowed(action){if(action.startsWith('plan-')||action.startsWith('game-'))return state.role==='eleve'&&state.examples;return !ROLE_ACTION_RULES[action]||ROLE_ACTION_RULES[action].includes(state.role)}
+function isRoleFormAllowed(id){const rules={loginForm:['eleve','parent','professeur','administration'],messageForm:['eleve','parent','professeur'],coachForm:['eleve'],coachAIForm:['eleve'],teacherCoachForm:['professeur'],gradebookForm:['professeur'],gradePeriodForm:['administration'],accountForm:['administration'],studentClassForm:['administration'],sessionForm:['professeur','administration'],helpForm:['eleve','parent','professeur','administration']};return rules[id]?.includes(state.role)&&!(id==='loginForm'&&state.page!=='connexion')}
+const PROFILE_CONTACT_LISTS={};
+function roleContacts(){if(!PROFILE_CONTACT_LISTS[state.role])PROFILE_CONTACT_LISTS[state.role]=state.role==='professeur'?[
+ {id:'amal',name:'Mme Amina El Amrani',sub:'Parent de Yassine · 6ᵉ A',initial:'AM',color:'mint',unread:1,time:'09:24',type:'parents',subject:'Suivi de Yassine'},
+ {id:'youssef',name:'M. Omar Bennis',sub:'Parent d’Inès · 6ᵉ A',initial:'OB',color:'orange',unread:0,time:'Hier',type:'parents',subject:'Suivi d’Inès'},
+ {id:'equipe',name:'Équipe pédagogique 6ᵉ A',sub:'Coordination des enseignants',initial:'6A',color:'mint',unread:2,time:'Hier',type:'administration',subject:'Organisation de la classe'},
+ {id:'salma',name:'Mme Salma Khatball',sub:'Collègue · SVT',initial:'SK',color:'purple',unread:0,time:'12/05',type:'administration',subject:'SVT'},
+ {id:'admin',name:'Administration',sub:'Informations de scolarité',initial:'AD',color:'purple',unread:0,time:'10/05',type:'administration',subject:'Scolarité'}
+ ]:contacts.map(c=>({...c}));return PROFILE_CONTACT_LISTS[state.role]}
+function messageThreadKey(){return state.role+':'+state.contact}
+function migrateMessages(data){const result={};for(const [key,value] of Object.entries(data||{}))result[key.includes(':')?key:'parent:'+key]=value;return result}
+function defaultThreadMessages(c){if(!state.examples)return [];if(c.id==='amal')return state.role==='eleve'?[
+ {own:false,text:'Bonjour Yassine ! Prêt pour découvrir les équations ? Tu peux avancer à ton rythme.',time:'09:20'},
+ {own:true,text:'Bonjour Madame ! J’ai commencé les exercices et je voudrais vérifier ma méthode.',time:'09:22'},
+ {own:false,text:'Bonne idée ! Pense à effectuer la même opération sur les deux membres. Voici un exercice supplémentaire pour t’entraîner.',time:'09:23'}
+ ]:state.role==='professeur'?[
+ {own:false,text:'Bonjour Madame, Yassine a bien suivi sa séance. Pourrions-nous prévoir une activité plus courte demain ?',time:'09:20'},
+ {own:true,text:'Bonjour, bien sûr. Nous pouvons adapter l’activité à son énergie et prévoir une pause.',time:'09:22'},
+ {own:false,text:'Merci pour votre accompagnement. Je lui transmettrai votre message.',time:'09:23'}
+ ]:[
+ {own:false,text:'Bonjour, j’espère que votre enfant se porte bien et que les cours à distance se passent bien.',time:'09:20'},
+ {own:true,text:'Bonjour Madame, merci pour votre message. Oui, tout se passe bien, il suit les cours avec assiduité.',time:'09:22'},
+ {own:false,text:'Parfait ! N’hésitez pas à me contacter pour toute question. Voici un exercice supplémentaire à faire cette semaine.',time:'09:23'}
+ ];return [{own:false,text:c.id==='equipe'?'Bienvenue dans les échanges de la classe 6ᵉ A. Retrouvez ici les informations de l’équipe pédagogique.':c.id==='admin'?'Bienvenue ! Nous restons à votre disposition pour toute question concernant votre scolarité.':state.role==='professeur'?'Bonjour ! Gardons le lien pour accompagner chaque élève à son rythme.':'Bonjour ! Je reste à votre disposition pour vous accompagner en '+c.subject.toLowerCase()+'.',time:'09:00'}]}
+function rolePageTitle(page=state.page){return menu[state.role].find(item=>item[0]===page)?.[2]||titles[page]}
+function resolveRoleRoute(){
+  const [role,page,subjectId]=location.hash.slice(1).split('/');
+  const permitted=allowedPages();
+  state.page=(!role||role===state.role)&&permitted.has(page)?page:'dashboard';
+  if(['accueil','connexion'].includes(page))state.page=page;
+  const subject=state.role==='eleve'&&state.page==='courses'&&subjectById(subjectId);
+  state.subject=subject?.id||'all';
+  const own=`#${state.role}/${state.page}${subject ? `/${subject.id}` : ''}`;
+  if(location.hash!==own)history.replaceState(null,'',own);
+}
+function goToOwnPage(page,role=state.role){if(role!==state.role||!allowedPages().has(page)){toast('Cette rubrique n’est pas disponible dans votre espace.');return}const hash=`#${state.role}/${page}`;if(location.hash===hash){state.page=page;render()}else location.hash=hash}
+function roleSupport(){return ({eleve:{title:'À tes côtés, chaque jour',text:'Un petit pas suffit pour continuer à grandir.',link:'Prendre soin de moi',page:'bien-etre',icon:'heart'},parent:{title:'Avancer ensemble',text:'Écouter et encourager votre enfant, chaque jour.',link:'Accompagner mon enfant',page:'bien-etre',icon:'heart'},professeur:{title:'Enseigner avec sérénité',text:'Des outils pour accompagner chaque élève.',link:'Mon aide pédagogique',page:'assistance',icon:'book'},administration:{title:'Une école qui accompagne',text:'Gérer les accès et la continuité scolaire.',link:'Contacter l’assistance',page:'assistance',icon:'headset'}})[state.role]}
+function renderRoleSidebar(){const r=currentProfile(),support=roleSupport(),admin=state.role==='administration';return `<div class="mobile-overlay" data-action="close-menu"></div><aside class="sidebar" id="main-navigation" aria-label="Navigation ${r.space}"><button class="icon-button menu-close" data-action="close-menu" aria-label="Fermer le menu">${icon('close')}</button><a class="brand" href="#${state.role}/accueil"><img src="assets/logo.svg" alt=""><span><strong>Madrassati Maâk</strong><small>L’école à mes côtés · مدرستي معاك</small></span></a><div class="side-kicker">${r.space.toLocaleUpperCase('fr')}</div><nav class="nav-list">${renderGroupedNavigation()}<div class="nav-help"><a class="nav-item ${state.page==='assistance'?'active':''}" href="#${state.role}/assistance" ${state.page==='assistance'?'aria-current="page"':''}>${icon('headset')}<span>Assistance</span></a></div></nav><div class="sidebar-bottom">${admin ? '' : `<div class="side-support">${tile(support.icon,'mint')}<h3>${support.title}</h3><p>${support.text}</p><button class="text-link" data-page="${support.page}">${support.link} ${icon('arrow','sm')}</button></div><div class="side-current-profile">${avatar(r.initial,'mint')}<div><strong>${r.name}</strong><span>${r.space}</span></div>${icon('shield','sm')}</div>`}<p class="prototype-label">MAQUETTE INTERACTIVE · DONNÉES FICTIVES</p></div></aside>`}
+
+function renderRoleTopbar(){const r=currentProfile();return `<header class="topbar"><div class="flex gap"><button class="icon-button mobile-toggle" data-action="menu" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="main-navigation">${icon('menu')}</button><div class="breadcrumb"><span class="breadcrumb-space">${r.space}</span>${icon('right')}<strong>${rolePageTitle()}</strong></div></div><div class="header-tools"><button class="icon-button header-search" data-action="find-resource" aria-label="Rechercher dans mon espace" title="Rechercher dans mon espace">${icon('search')}<span>Rechercher</span><kbd data-no-i18n="true" dir="ltr" aria-hidden="true">Ctrl K</kbd></button>${languageToggle()}${renderSupportNotifications()}<span class="separator"></span><div class="profile-wrap"><button class="profile-button" data-action="profile" aria-expanded="false">${avatar(r.initial,'mint')}<div><strong>${r.name}</strong><small>${r.sub}</small></div>${icon('chevron')}</button><div id="profile-popover" class="popover hidden"><div class="popover-title">${r.space}</div><button class="row" data-page="parametres">${icon('settings','sm')}Mes préférences</button><button class="row" data-page="accueil">${icon('home','sm')}Découvrir la plateforme</button><button class="row" data-page="connexion">${icon('logout','sm')}Changer de profil / connexion</button></div></div></div></header>`}
+function parentWellbeingPage(){return `${heading('Le bien-être de mon enfant','L’aider à avancer en respectant son énergie.')}<div class="wellbeing-layout"><section class="wellbeing-hero">${tile('heart','mint')}<h2>Chaque petit progrès compte.</h2><p>Valorisez ses efforts et ses découvertes, dans les cours comme dans les jeux. Une activité courte et un moment d’écoute peuvent l’aider à garder confiance.</p><div class="mt"><h3>Son humeur partagée</h3><p class="mt">${state.mood?({great:'😊 En forme',calm:'🙂 Ça va',tired:'😴 Fatigué',sad:'😔 Pas très bien'})[state.mood]:'Votre enfant n’a pas encore partagé son humeur dans cette maquette.'}</p></div><div class="mt">${fatigueToggle()}</div><p class="tiny mt">Le mode fatigue propose des séances et des jeux plus courts.</p></section><section class="card">${cardHeading('Quelques gestes simples')}<ul class="parent-support-list"><li>${icon('heart')}Écouter ce qu’il ressent avant de commencer une activité.</li><li>${icon('star')}Féliciter une idée comprise, un effort ou une question.</li><li>${icon('clock')}Prévoir des pauses et éviter la pression des résultats.</li><li>${icon('mail')}Échanger avec son professeur quand son rythme change.</li></ul><button class="btn secondary full mt" data-page="messagerie">Écrire à son professeur</button></section></div>${parentGamesSummary()}`}

@@ -1,0 +1,128 @@
+.teacher-coach-types {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 12px;
+  margin-block-end: 18px;
+}
+.teacher-coach-types button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 11px 14px;
+  border: 1px solid #dae7dc;
+  border-radius: 14px;
+  background: #fff;
+  color: #254531;
+  font-weight: 700;
+  text-align: start;
+}
+.teacher-coach-types button[aria-pressed="true"] {
+  border-color: #5c916e;
+  background: #eef7ed;
+  box-shadow: inset 0 0 0 1px #5c916e;
+}
+.teacher-coach-types button:hover:not(:disabled) { border-color: #5c916e; }
+.teacher-coach-types .icon-tile { flex-shrink: 0; }
+.teacher-coach-grid {
+  display: grid;
+  grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr);
+  gap: 18px;
+  align-items: start;
+}
+.teacher-coach-editor, .teacher-coach-output { min-width: 0; }
+.teacher-coach-editor h2, .teacher-coach-output h2 { margin: 0 0 9px; font-size: 19px; overflow-wrap: anywhere; }
+.teacher-coach-subject, .teacher-coach-connected, .teacher-coach-document-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.teacher-coach-subject { margin-block-end: 14px; color: #385443; }
+.teacher-coach-connected, .teacher-coach-editor .coach-ai-status {
+  padding: 12px;
+  border: 1px solid #dce8dd;
+  border-radius: 12px;
+  background: #f2f8f2;
+  color: #294c36;
+}
+#teacherCoachForm { margin-block-start: 15px; }
+.teacher-coach-fields { display: grid; gap: 13px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.teacher-coach-fields input, .teacher-coach-fields select, .teacher-coach-fields textarea { min-width: 0; width: 100%; }
+.teacher-coach-settings > div { min-width: 0; }
+.teacher-practice-topics { color: #385443; }
+.teacher-practice-topics summary { cursor: pointer; font-weight: 650; }
+.teacher-practice-topics .homework-actions, .teacher-coach-jump { margin-block-start: 8px; }
+.teacher-coach-document-meta + h2 { margin-block-start: 4px; }
+.school-body .teacher-coach-editor .coach-ai-status { display: grid; gap: 7px; justify-items: start; }
+.school-body .teacher-coach-grid .homework-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.school-body .teacher-coach-settings, .school-body .teacher-coach-fields > .form-grid { display: grid; gap: 12px;
+  grid-template-columns: repeat(2,minmax(0,1fr)); }
+.teacher-coach-feedback { font-size: 13px; line-height: 1.5; color: #294c36; }
+.teacher-coach-feedback p + p { margin-block-start: 5px; }
+.teacher-coach-feedback:empty { display: none; }
+.teacher-coach-local-note { margin-block-start: 7px; }
+.teacher-coach-empty { max-width: 32ch; color: #49614f; line-height: 1.6; }
+.teacher-coach-document-meta { margin-block-end: 10px; color: #49614f; }
+.teacher-coach-output h3 { margin-block: 16px 7px; font-size: 15px; }
+.teacher-draft-text {
+  padding: 14px;
+  margin: 0 0 12px;
+  border: 1px solid #dce8dd;
+  border-radius: 10px;
+  background: #f8fbf7;
+  color: #294635;
+  font: inherit;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.teacher-coach-correction, .teacher-preparation-notes { margin-block-start: 16px; border-block-start: 1px solid #dce8dd; padding-block-start: 12px; }
+.teacher-coach-correction summary, .teacher-preparation-notes summary { margin-block-end: 10px; color: #285340; font-weight: 700; cursor: pointer; }
+.teacher-coach-output .homework-actions { margin-block-end: 12px; }
+.teacher-coach-correction .btn { margin-block-end: 12px; }
+.teacher-practice-topics button[hidden] { display: none; }
+.teacher-lesson-contents { padding: 12px 14px; margin-block-end: 12px; border: 1px solid #dce8dd; border-radius: 10px; }
+.teacher-lesson-contents summary { color: #285340; font-weight: 700; cursor: pointer; }
+.teacher-lesson-contents ul { margin: 8px 0 0; padding-inline-start: 1.2em; }
+.teacher-lesson-contents li + li { margin-block-start: 4px; }
+.teacher-lesson-contents a { color: #285340; text-decoration: underline; }
+.teacher-lesson-sections { white-space: normal; }
+.teacher-lesson-sections section { scroll-margin-block-start: 84px; }
+.teacher-lesson-sections section + section { border-block-start: 1px solid #dce8dd; margin-block-start: 16px; padding-block-start: 14px; }
+.teacher-lesson-sections h4 { margin: 0 0 7px; color: #254531; }
+.teacher-lesson-sections p { margin: 0; white-space: pre-wrap; }
+.teacher-lesson-plan { display: grid; gap: 7px; padding: 12px; border: 1px solid #dce8dd; border-radius: 12px; }
+.teacher-lesson-plan small { line-height: 1.4; }
+.teacher-course-chapters { padding-inline-start: 1.35rem; margin: 0; }
+.teacher-course-chapters > li + li { margin-block-start: .65rem; }
+.teacher-lesson-plan .btn { justify-self: start; margin-block-start: 3px; }
+.teacher-lesson-additions { margin-block-start: 12px; }
+.teacher-lesson-additions summary, .teacher-calculations summary { color: #285340; font-weight: 700; cursor: pointer; }
+.teacher-lesson-additions .homework-actions { margin-block: 8px 0; }
+.teacher-lesson-exercise + .teacher-lesson-exercise { margin-block-start: 14px; }
+.teacher-lesson-exercise h5 { font-size: inherit; margin: 0 0 3px; }
+.teacher-lesson-exercise a, .lesson-reference { color: #285d42; text-decoration: underline; text-underline-offset: 3px; }
+.lesson-reference { display: inline-block; background: transparent; padding: 3px 0; border: 0; font: inherit; text-align: start; cursor: pointer; }
+.teacher-calculations { border: 1px solid #d6e6d9; background: #f2f8f4; border-radius: 12px; padding: 11px 13px; margin-block-end: 12px; }
+.teacher-calculations p { margin-block: 8px; font-size: .9em; }
+.teacher-calculations ul { margin: 0; padding-inline-start: 1.25em; }
+.teacher-calculations .lesson-check-review { color: #8b311a; }
+.lesson-review-button { margin-block-start: 8px; border-color: #dfbfb0; color: #8b311a; }
+.teacher-calculations .lesson-check-unknown { color: #5d5345; }
+.lesson-figure { margin: 12px 0; padding: 8px 10px; border: 1px solid #dce8dd; border-radius: 10px; background: #fff; }
+.lesson-figure svg { display: block; width: 100%; max-width: 500px; height: auto; margin-inline: auto; font-family: Arial,sans-serif; }
+.lesson-figure figcaption { border-block-start: 1px solid #e4eee6; padding-block-start: 7px; font-size: .88em; line-height: 1.45; }
+.school-lesson-reading p { white-space: pre-wrap; margin-block: 6px 12px; overflow-wrap: anywhere; }
+.school-lesson-reading h4 { margin-block: 13px 5px; }
+.school-lesson-reading [data-lesson-section] { scroll-margin-block-start: 84px; }
+@media (max-width: 960px) {
+  .teacher-coach-grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 500px) {
+  .teacher-coach-types { gap: 7px; }
+  .teacher-coach-types button { min-height: 70px; flex-direction: column; justify-content: center; gap: 5px; padding: 7px 4px; text-align: center; }
+  .teacher-coach-types .icon-tile { width: 30px; height: 30px; }
+  .school-body .teacher-coach-settings, .school-body .teacher-coach-fields > .form-grid { grid-template-columns: 1fr; }
+}
